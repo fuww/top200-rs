@@ -12,9 +12,21 @@ use tokio;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Read the latest CSV file
-    let csv_path = "output/combined_marketcaps_20241205_171822.csv";
-    let mut rdr = csv::Reader::from_path(csv_path)?;
+    // Find the latest CSV file
+    let output_dir = PathBuf::from("output");
+    let latest_csv = std::fs::read_dir(&output_dir)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.path().extension().map_or(false, |ext| ext == "csv") &&
+            entry.path().file_name()
+                .and_then(|name| name.to_str())
+                .map_or(false, |name| name.starts_with("combined_marketcaps_"))
+        })
+        .max_by_key(|entry| entry.metadata().unwrap().modified().unwrap())
+        .ok_or_else(|| anyhow::anyhow!("No CSV files found in output directory"))?;
+
+    let csv_path = latest_csv.path();
+    let mut rdr = csv::Reader::from_path(&csv_path)?;
     
     let mut stocks = Vec::new();
     for result in rdr.records() {
@@ -22,7 +34,6 @@ async fn main() -> Result<()> {
         stocks.push(viz::StockData {
             symbol: record[0].to_string(),
             market_cap_eur: record[4].parse::<f64>().unwrap_or(0.0),
-            price_change: record[7].parse::<f64>().unwrap_or(0.0),
         });
     }
 
@@ -427,7 +438,6 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         .map(|(_, record)| viz::StockData {
             symbol: record[0].clone(),
             market_cap_eur: record[4].parse::<f64>().unwrap_or(0.0),
-            price_change: record[7].parse::<f64>().unwrap_or(0.0),
         })
         .collect();
 
@@ -710,7 +720,6 @@ async fn export_combined_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
         .map(|(_, record)| viz::StockData {
             symbol: record[0].clone(),
             market_cap_eur: record[4].parse::<f64>().unwrap_or(0.0),
-            price_change: record[7].parse::<f64>().unwrap_or(0.0),
         })
         .collect();
 
