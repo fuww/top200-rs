@@ -1,7 +1,6 @@
 non_us_tickers = [
     "MC.PA", # LVMH
     "ITX.MC", # Inditex
-    "IDEXY", # Inditex (ADR)
     "CDI.PA", # Dior
     "KER.PA", # Kering
     "RMS.PA", # Hermès
@@ -54,7 +53,6 @@ non_us_tickers = [
     "AEF.MI", # Aeffe
     "BORG.ST", # Björn Borg
     "GFG.DE", # Global Fashion Group
-    "KER.PA", # Kering
     "SFL.MI", # Safilo Group
     "WOL.VI", # Wolford AG
     "YOU.DE", # ABOUT YOU
@@ -67,7 +65,7 @@ non_us_tickers = [
     "LINDEX.HE", # Lindex Group
     "DLTI.TA", # Delta Israel Brands
     "RVRC.ST", # RVRC Holding
-    "ILP.PK", # Interloop
+    # "ILP.PK", # Interloop WERKT NIET
     "0709.HK", # Giordano
     "2368.HK", # Eagle Nice
     "SMCP.PA", # SMCP S.A.

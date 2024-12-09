@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use reqwest::Client;
 use serde::Deserialize;
-use serde_json;
+use serde_json::{self, Value};
 use std::{env, time::Duration};
 use tokio::time::sleep;
 use std::collections::HashMap;
@@ -49,28 +49,47 @@ impl FMPClient {
             .await
             .context("Failed to send request")?;
 
-        let status = response.status();
-        let text = response.text().await.context("Failed to get response text")?;
+        let profiles: Vec<FMPCompanyProfile> = response
+            .json()
+            .await
+            .context("Failed to parse response")?;
 
-        if !status.is_success() {
-            anyhow::bail!("API request failed: {}", text);
+        if profiles.is_empty() {
+            anyhow::bail!("No data found for ticker");
         }
 
-        let profiles: Vec<FMPCompanyProfile> = serde_json::from_str(&text)
-            .context("Failed to parse FMP response")?;
+        let profile = &profiles[0];
+        let currency = profile.currency.as_str();
 
-        let profile = profiles
-            .into_iter()
-            .next()
-            .context("No profile data returned")?;
+        // Get current timestamp in ISO 8601 format
+        let timestamp = chrono::Utc::now().to_rfc3339();
 
-        let currency_symbol = match profile.currency.as_str() {
-            "USD" => "$",
-            "EUR" => "€",
-            "GBP" => "£",
-            "CHF" => "CHF",
-            "DKK" => "kr",
-            _ => &profile.currency,
+        let mut details = Details {
+            ticker: profile.symbol.clone(),
+            market_cap: Some(profile.market_cap),
+            name: Some(profile.company_name.clone()),
+            currency_name: Some(currency.to_string()),
+            currency_symbol: Some(currency.to_string()),
+            active: Some(profile.is_active),
+            description: Some(profile.description.clone()),
+            homepage_url: Some(profile.website.clone()),
+            weighted_shares_outstanding: None,  // Not available in FMP API
+            employees: profile.employees.clone(),
+            revenue: None,
+            revenue_usd: None,
+            timestamp: Some(timestamp),
+            working_capital_ratio: None,
+            quick_ratio: None,
+            eps: None,
+            pe_ratio: None,
+            debt_equity_ratio: None,
+            roe: None,
+            extra: {
+                let mut map = std::collections::HashMap::new();
+                map.insert("exchange".to_string(), Value::String(profile.exchange.clone()));
+                map.insert("price".to_string(), Value::Number(serde_json::Number::from_f64(profile.price).unwrap_or(serde_json::Number::from(0))));
+                map
+            },
         };
 
         // Fetch ratios and income statement
@@ -88,27 +107,16 @@ impl FMPClient {
             )
         });
 
-        Ok(Details {
-            ticker: profile.symbol.clone(),
-            market_cap: Some(profile.market_cap),
-            name: Some(profile.company_name.clone()),
-            currency_name: Some(profile.currency.clone()),
-            currency_symbol: Some(currency_symbol.to_string()),
-            active: Some(profile.is_active),
-            description: Some(profile.description.clone()),
-            homepage_url: Some(profile.website.clone()),
-            weighted_shares_outstanding: None,
-            employees: profile.employees.clone(),
-            revenue,
-            revenue_usd,
-            working_capital_ratio: ratios.as_ref().and_then(|r| r.current_ratio),
-            quick_ratio: ratios.as_ref().and_then(|r| r.quick_ratio),
-            eps: ratios.as_ref().and_then(|r| r.eps),
-            pe_ratio: ratios.as_ref().and_then(|r| r.price_earnings_ratio),
-            debt_equity_ratio: ratios.as_ref().and_then(|r| r.debt_equity_ratio),
-            roe: ratios.as_ref().and_then(|r| r.return_on_equity),
-            extra: std::collections::HashMap::new(),
-        })
+        details.revenue = revenue;
+        details.revenue_usd = revenue_usd;
+        details.working_capital_ratio = ratios.as_ref().and_then(|r| r.current_ratio);
+        details.quick_ratio = ratios.as_ref().and_then(|r| r.quick_ratio);
+        details.eps = ratios.as_ref().and_then(|r| r.eps);
+        details.pe_ratio = ratios.as_ref().and_then(|r| r.price_earnings_ratio);
+        details.debt_equity_ratio = ratios.as_ref().and_then(|r| r.debt_equity_ratio);
+        details.roe = ratios.as_ref().and_then(|r| r.return_on_equity);
+
+        Ok(details)
     }
 
     pub async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {

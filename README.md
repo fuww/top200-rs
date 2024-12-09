@@ -1,5 +1,9 @@
 # top200-rs
 
+## TODO
+- edit so I can run $ cargo run -- export-details-combined
+- add a command so I can test with just a few tickers
+
 ## Changelog
 
 Converted exchange prefixes to FMP format:

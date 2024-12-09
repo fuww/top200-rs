@@ -20,6 +20,7 @@ pub struct Details {
     pub employees: Option<String>,
     pub revenue: Option<f64>,
     pub revenue_usd: Option<f64>,
+    pub timestamp: Option<String>,
     // Financial ratios
     pub working_capital_ratio: Option<f64>,
     pub quick_ratio: Option<f64>,

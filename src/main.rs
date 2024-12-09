@@ -338,60 +338,6 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         rate_map.insert(rate.name.clone(), rate.price);
     }
 
-    // Helper function to convert currency symbol to code and get divisor
-    let currency_to_code = |currency: &str| -> (String, f64) {
-        match currency {
-            "€" => ("EUR".to_string(), 1.0),
-            "$" => ("USD".to_string(), 1.0),
-            "£" => ("GBP".to_string(), 1.0),
-            "¥" => ("JPY".to_string(), 1.0),
-            "₣" => ("CHF".to_string(), 1.0),
-            "kr" => ("SEK".to_string(), 1.0),
-            "GBp" => ("GBP".to_string(), 100.0),  // Convert pence to pounds
-            "GBX" => ("GBP".to_string(), 100.0),  // Alternative notation for pence
-            _ => (currency.to_string(), 1.0)
-        }
-    };
-
-    // Helper function to convert amount from source currency to target currency
-    let convert_currency = |amount: f64, from_currency: &str, to_currency: &str| -> f64 {
-        let (from_code, from_divisor) = currency_to_code(from_currency);
-        let amount = amount / from_divisor; // Convert to main currency unit if needed
-        
-        if from_code == to_currency {
-            amount
-        } else {
-            // First try direct conversion
-            let pair = format!("{}/{}", from_code, to_currency);
-            if let Some(&rate) = rate_map.get(&pair) {
-                amount * rate
-            } else {
-                // Try inverse conversion
-                let inverse_pair = format!("{}/{}", to_currency, from_code);
-                if let Some(&rate) = rate_map.get(&inverse_pair) {
-                    amount / rate
-                } else {
-                    // If no direct conversion exists, try through USD
-                    let to_usd = format!("{}/USD", from_code);
-                    let usd_to_target = rate_map.get(&format!("USD/{}", to_currency)).copied().unwrap_or_else(|| {
-                        if to_currency == "EUR" {
-                            0.92 // Fallback USD to EUR
-                        } else {
-                            1.0 // Fallback for USD
-                        }
-                    });
-                    
-                    if let Some(&rate) = rate_map.get(&to_usd) {
-                        amount * rate * usd_to_target
-                    } else {
-                        println!("⚠️  Warning: No conversion rate found for {} to {}", from_currency, to_currency);
-                        amount // Return unconverted amount as fallback
-                    }
-                }
-            }
-        }
-    };
-
     // Convert exchange prefixes to FMP format
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let filename = format!("output/combined_marketcaps_{}.csv", timestamp);
@@ -420,6 +366,7 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         "P/E Ratio",
         "D/E Ratio",
         "ROE",
+        "Timestamp",
     ])?;
 
     // Collect all results first
@@ -430,8 +377,8 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
             Ok(details) => {
                 let original_market_cap = details.market_cap.unwrap_or(0.0);
                 let currency = details.currency_symbol.clone().unwrap_or_default();
-                let eur_market_cap = convert_currency(original_market_cap, &currency, "EUR");
-                let usd_market_cap = convert_currency(original_market_cap, &currency, "USD");
+                let eur_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "EUR", &rate_map);
+                let usd_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "USD", &rate_map);
                 
                 results.push((
                     eur_market_cap,
@@ -456,6 +403,7 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                         details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
                         details.debt_equity_ratio.map(|r| r.to_string()).unwrap_or_default(),
                         details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                        details.timestamp.unwrap_or_default(),
                     ]
                 ));
                 println!("✅ Data collected");
@@ -483,6 +431,8 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                         "".to_string(),
                         "".to_string(),
                         "".to_string(),
+                        "".to_string(),
+                        "".to_string(),
                     ]
                 ));
             }
@@ -495,37 +445,10 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
 
     // Write sorted results to CSV
     for (_, record) in &results {  
-        writer.write_record(&*record)?;  // Dereference to get &[String]
+        writer.write_record(&*record)?;
     }
 
     println!("📝 CSV file created: {}", filename);
-    println!("💶 Results are sorted by market cap in EUR (highest to lowest)");
-
-    // Generate heatmap
-    println!("\nGenerating market heatmap...");
-    let heatmap_filename = format!("output/heatmap_{}.png", timestamp);
-    generate_market_heatmap(&results, &heatmap_filename)?;
-    println!("🎨 Heatmap generated: {}", heatmap_filename);
-
-    Ok(())
-}
-
-fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) -> Result<()> {
-    let mut stocks = Vec::new();
-    
-    // Only take the first 100 results since they're already sorted by market cap
-    for (market_cap, data) in results.iter().take(100) {
-        if *market_cap > 0.0 {  // Skip error entries
-            stocks.push((*market_cap, viz::StockData {
-                symbol: data[0].clone(),
-                market_cap_eur: *market_cap,
-                employees: data[11].clone(),  
-            }));
-        }
-    }
-
-    println!("📊 Generating heatmap with top {} companies", stocks.len());
-    viz::create_market_heatmap(stocks.into_iter().map(|(_, data)| data).collect(), output_path)?;
     Ok(())
 }
 
@@ -714,6 +637,25 @@ async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Re
     Ok(())
 }
 
+fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) -> Result<()> {
+    let mut stocks = Vec::new();
+    
+    // Only take the first 100 results since they're already sorted by market cap
+    for (market_cap, data) in results.iter().take(100) {
+        if *market_cap > 0.0 {  // Skip error entries
+            stocks.push((*market_cap, viz::StockData {
+                symbol: data[0].clone(),
+                market_cap_eur: *market_cap,
+                employees: data[11].clone(),  
+            }));
+        }
+    }
+
+    println!("📊 Generating heatmap with top {} companies", stocks.len());
+    viz::create_market_heatmap(stocks.into_iter().map(|(_, data)| data).collect(), output_path)?;
+    Ok(())
+}
+
 fn get_rate_map() -> HashMap<String, f64> {
     let mut rate_map = HashMap::new();
     
@@ -729,7 +671,42 @@ fn get_rate_map() -> HashMap<String, f64> {
     rate_map.insert("CNY/USD".to_string(), 0.139);
     rate_map.insert("BRL/USD".to_string(), 0.203);
     rate_map.insert("CAD/USD".to_string(), 0.737);
-    rate_map.insert("ILS/USD".to_string(), 0.27);  // Adding Israeli Shekel rate
+    rate_map.insert("ILS/USD".to_string(), 0.27);  // Israeli Shekel rate
+    rate_map.insert("ZAR/USD".to_string(), 0.053); // South African Rand rate
+
+    // Add reverse rates (USD to currency)
+    let mut pairs_to_add = Vec::new();
+    for (pair, &rate) in rate_map.clone().iter() {
+        if let Some((from, to)) = pair.split_once('/') {
+            pairs_to_add.push((format!("{}/{}", to, from), 1.0 / rate));
+        }
+    }
+    
+    // Add cross rates (currency to currency)
+    let base_pairs: Vec<_> = rate_map.clone().into_iter().collect();
+    for (pair1, rate1) in &base_pairs {
+        if let Some((from1, "USD")) = pair1.split_once('/') {
+            for (pair2, rate2) in &base_pairs {
+                if let Some(("USD", to2)) = pair2.split_once('/') {
+                    if from1 != to2 {
+                        // Calculate cross rate: from1/to2 = (from1/USD) * (USD/to2)
+                        pairs_to_add.push((format!("{}/{}", from1, to2), rate1 * rate2));
+                    }
+                }
+            }
+        }
+    }
+
+    // Add all the new pairs
+    for (pair, rate) in pairs_to_add {
+        rate_map.insert(pair, rate);
+    }
+    
+    // Debug print
+    println!("Available rates:");
+    for (pair, rate) in &rate_map {
+        println!("{}: {}", pair, rate);
+    }
     
     rate_map
 }
