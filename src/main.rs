@@ -26,6 +26,7 @@ async fn main() -> Result<()> {
         "Export US stock marketcaps to CSV".to_string(),
         "Export EU stock marketcaps to CSV".to_string(),
         "Generate Market Heatmap".to_string(),
+        "Output top 100 active tickers".to_string(),
         "Exit".to_string(),
     ];
 
@@ -48,6 +49,7 @@ async fn main() -> Result<()> {
             "Export US stock marketcaps to CSV" => export_details_us_csv().await?,
             "Export EU stock marketcaps to CSV" => export_details_eu_csv().await?,
             "Generate Market Heatmap" => export_details_combined_csv(&api::FMPClient::new(env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set"))).await?,
+            "Output top 100 active tickers" => output_top_100_active()?,
             "Exit" => println!("Exiting..."),
             _ => unreachable!(),
         },
@@ -432,7 +434,6 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                         "".to_string(),
                         "".to_string(),
                         "".to_string(),
-                        "".to_string(),
                     ]
                 ));
             }
@@ -440,15 +441,64 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
-    // Sort by EUR market cap (highest to lowest)
-    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    // Sort by market cap (EUR)
+    results.sort_by(|(a_cap, _), (b_cap, _)| b_cap.partial_cmp(a_cap).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Write sorted results to CSV
-    for (_, record) in &results {  
-        writer.write_record(&*record)?;
+    // Write all results
+    for (_, record) in &results {
+        writer.write_record(record)?;
     }
+    writer.flush()?;
+    println!("✅ Combined market caps written to: {}", filename);
 
-    println!("📝 CSV file created: {}", filename);
+    // Filter active tickers and get top 100
+    let top_100_results: Vec<(f64, Vec<String>)> = results.iter()
+        .filter(|(_, record)| record[8] == "true") // Active column
+        .take(100)
+        .map(|(cap, record)| (*cap, record.clone()))
+        .collect();
+
+    // Generate top 100 CSV
+    let top_100_filename = format!("output/top_100_active_{}.csv", timestamp);
+    let top_100_file = std::fs::File::create(&top_100_filename)?;
+    let mut top_100_writer = csv::Writer::from_writer(top_100_file);
+
+    // Write headers
+    top_100_writer.write_record(&[
+        "Ticker",
+        "Name",
+        "Market Cap (Original)",
+        "Original Currency",
+        "Market Cap (EUR)",
+        "Market Cap (USD)",
+        "Exchange",
+        "Price",
+        "Active",
+        "Description",
+        "Homepage URL",
+        "Employees",
+        "Revenue",
+        "Revenue (USD)",
+        "Working Capital Ratio",
+        "Quick Ratio",
+        "EPS",
+        "P/E Ratio",
+        "D/E Ratio",
+        "ROE",
+        "Timestamp",
+    ])?;
+
+    // Write top 100 records
+    for (_, record) in &top_100_results {
+        top_100_writer.write_record(record)?;
+    }
+    top_100_writer.flush()?;
+    println!("✅ Top 100 active tickers written to: {}", top_100_filename);
+
+    // Generate market heatmap from top 100
+    generate_market_heatmap(&top_100_results, "output/market_heatmap.png")?;
+    println!("✅ Market heatmap generated from top 100 active tickers");
+
     Ok(())
 }
 
@@ -709,4 +759,66 @@ fn get_rate_map() -> HashMap<String, f64> {
     }
     
     rate_map
+}
+
+/// Output the top 100 active tickers from the latest combined marketcaps CSV file
+pub fn output_top_100_active() -> Result<()> {
+    use std::fs;
+    use chrono::NaiveDateTime;
+
+    // Find the latest CSV file
+    let entries = fs::read_dir("output")?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.path()
+                .to_str()
+                .map(|s| s.contains("combined_marketcaps_"))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    let latest_file = entries
+        .iter()
+        .max_by_key(|entry| entry.metadata().unwrap().modified().unwrap())
+        .ok_or_else(|| anyhow::anyhow!("No CSV files found in output directory"))?;
+
+    println!("Reading from latest file: {:?}", latest_file.path());
+
+    // Read and parse the CSV
+    let mut rdr = csv::Reader::from_path(latest_file.path())?;
+    let headers = rdr.headers()?.clone();
+
+    // Parse records and filter active ones
+    let mut records: Vec<csv::StringRecord> = rdr
+        .records()
+        .filter_map(|record| record.ok())
+        .filter(|record| {
+            // Get the "Active" column (index 8) and check if it's "true"
+            record.get(8).map(|active| active == "true").unwrap_or(false)
+        })
+        .collect();
+
+    // Sort by market cap (EUR) in descending order
+    records.sort_by(|a, b| {
+        let a_cap: f64 = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        let b_cap: f64 = b.get(4).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+        b_cap.partial_cmp(&a_cap).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // Take top 100
+    let records = records.into_iter().take(100).collect::<Vec<_>>();
+
+    // Create new CSV file for top 100
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let output_file = format!("output/top_100_active_{}.csv", timestamp);
+    let mut writer = csv::Writer::from_path(&output_file)?;
+
+    // Write headers and records
+    writer.write_record(&headers)?;
+    for record in records {
+        writer.write_record(&record)?;
+    }
+    writer.flush()?;
+    println!("✅ Top 100 active tickers written to: {}", output_file);
+    Ok(())
 }

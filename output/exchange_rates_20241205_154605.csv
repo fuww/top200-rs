@@ -1,2 +1,0 @@
-Symbol,Rate,Change %,Change,Day Low,Day High,Base Currency,Quote Currency,Timestamp
-ERROR,,,,,,,,"Error: error decoding response body: invalid type: floating point `59.30491803278689`, expected i64 at line 41 column 34"

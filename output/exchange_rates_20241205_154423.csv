@@ -1,2 +1,0 @@
-Symbol,Rate,Timestamp,Base Currency,Quote Currency
-ERROR,,,,Error: error decoding response body: missing field `symbol` at line 11 column 3
