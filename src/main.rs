@@ -25,7 +25,7 @@ async fn main() -> Result<()> {
         "List EU stock marketcaps".to_string(),
         "Export US stock marketcaps to CSV".to_string(),
         "Export EU stock marketcaps to CSV".to_string(),
-        "Generate Market Heatmap".to_string(),
+        "Generate Market Heatmap from latest top 100".to_string(),
         "Output top 100 active tickers".to_string(),
         "Exit".to_string(),
     ];
@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
             "List EU stock marketcaps" => list_details_eu().await?,
             "Export US stock marketcaps to CSV" => export_details_us_csv().await?,
             "Export EU stock marketcaps to CSV" => export_details_eu_csv().await?,
-            "Generate Market Heatmap" => export_details_combined_csv(&api::FMPClient::new(env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set"))).await?,
+            "Generate Market Heatmap from latest top 100" => generate_heatmap_from_latest()?,
             "Output top 100 active tickers" => output_top_100_active()?,
             "Exit" => println!("Exiting..."),
             _ => unreachable!(),
@@ -688,22 +688,15 @@ async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Re
 }
 
 fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) -> Result<()> {
-    let mut stocks = Vec::new();
-    
-    // Only take the first 100 results since they're already sorted by market cap
-    for (market_cap, data) in results.iter().take(100) {
-        if *market_cap > 0.0 {  // Skip error entries
-            stocks.push((*market_cap, viz::StockData {
-                symbol: data[0].clone(),
-                market_cap_eur: *market_cap,
-                employees: data[11].clone(),  
-            }));
+    let stocks: Vec<viz::StockData> = results.iter().map(|(market_cap, record)| {
+        viz::StockData {
+            symbol: record[0].clone(),  // Ticker is at index 0
+            market_cap_eur: *market_cap,
+            employees: record[11].clone(),  // Employees is at index 11
         }
-    }
+    }).collect();
 
-    println!("📊 Generating heatmap with top {} companies", stocks.len());
-    viz::create_market_heatmap(stocks.into_iter().map(|(_, data)| data).collect(), output_path)?;
-    Ok(())
+    viz::create_market_heatmap(stocks, output_path)
 }
 
 fn get_rate_map() -> HashMap<String, f64> {
@@ -820,5 +813,48 @@ pub fn output_top_100_active() -> Result<()> {
     }
     writer.flush()?;
     println!("✅ Top 100 active tickers written to: {}", output_file);
+    Ok(())
+}
+
+/// Generate a heatmap from the latest top 100 active tickers CSV file
+fn generate_heatmap_from_latest() -> Result<()> {
+    use std::fs;
+
+    // Find the latest top 100 CSV file
+    let entries = fs::read_dir("output")?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.path()
+                .to_str()
+                .map(|s| s.contains("top_100_active_"))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    let latest_file = entries
+        .iter()
+        .max_by_key(|entry| entry.metadata().unwrap().modified().unwrap())
+        .ok_or_else(|| anyhow::anyhow!("No top 100 CSV files found in output directory"))?;
+
+    println!("Reading from latest file: {:?}", latest_file.path());
+
+    // Read and parse the CSV
+    let mut rdr = csv::Reader::from_path(latest_file.path())?;
+    let mut results = Vec::new();
+
+    for record in rdr.records() {
+        let record = record?;
+        if let Ok(market_cap) = record[4].parse::<f64>() { // Market Cap (EUR) is at index 4
+            results.push((
+                market_cap,
+                record.iter().map(|s| s.to_string()).collect()
+            ));
+        }
+    }
+
+    // Generate the heatmap
+    generate_market_heatmap(&results, "output/market_heatmap.png")?;
+    println!("✅ Market heatmap generated from latest top 100 active tickers");
+
     Ok(())
 }
