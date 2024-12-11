@@ -754,18 +754,16 @@ fn get_rate_map() -> HashMap<String, f64> {
     rate_map
 }
 
-/// Output the top 100 active tickers from the latest combined marketcaps CSV file
-pub fn output_top_100_active() -> Result<()> {
+/// Find the latest file in the output directory that matches a pattern
+fn find_latest_file(pattern: &str) -> Result<std::path::PathBuf> {
     use std::fs;
-    use chrono::NaiveDateTime;
 
-    // Find the latest CSV file
     let entries = fs::read_dir("output")?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
             entry.path()
                 .to_str()
-                .map(|s| s.contains("combined_marketcaps_"))
+                .map(|s| s.contains(pattern))
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
@@ -773,12 +771,50 @@ pub fn output_top_100_active() -> Result<()> {
     let latest_file = entries
         .iter()
         .max_by_key(|entry| entry.metadata().unwrap().modified().unwrap())
-        .ok_or_else(|| anyhow::anyhow!("No CSV files found in output directory"))?;
+        .ok_or_else(|| anyhow::anyhow!("No files matching '{}' found in output directory", pattern))?;
 
-    println!("Reading from latest file: {:?}", latest_file.path());
+    Ok(latest_file.path())
+}
+
+/// Read CSV file and return records with market cap in EUR
+fn read_csv_with_market_cap(file_path: &std::path::Path) -> Result<Vec<(f64, Vec<String>)>> {
+    let mut rdr = csv::Reader::from_path(file_path)?;
+    let mut results = Vec::new();
+
+    for record in rdr.records() {
+        let record = record?;
+        if let Ok(market_cap) = record[4].parse::<f64>() { // Market Cap (EUR) is at index 4
+            results.push((
+                market_cap,
+                record.iter().map(|s| s.to_string()).collect()
+            ));
+        }
+    }
+
+    Ok(results)
+}
+
+/// Generate a heatmap from the latest top 100 active tickers CSV file
+fn generate_heatmap_from_latest() -> Result<()> {
+    let latest_file = find_latest_file("top_100_active_")?;
+    println!("Reading from latest file: {:?}", latest_file);
+
+    let results = read_csv_with_market_cap(&latest_file)?;
+
+    // Generate the heatmap
+    generate_market_heatmap(&results, "output/market_heatmap.png")?;
+    println!("✅ Market heatmap generated from latest top 100 active tickers");
+
+    Ok(())
+}
+
+/// Output the top 100 active tickers from the latest combined marketcaps CSV file
+pub fn output_top_100_active() -> Result<()> {
+    let latest_file = find_latest_file("combined_marketcaps_")?;
+    println!("Reading from latest file: {:?}", latest_file);
 
     // Read and parse the CSV
-    let mut rdr = csv::Reader::from_path(latest_file.path())?;
+    let mut rdr = csv::Reader::from_path(&latest_file)?;
     let headers = rdr.headers()?.clone();
 
     // Parse records and filter active ones
@@ -813,48 +849,11 @@ pub fn output_top_100_active() -> Result<()> {
     }
     writer.flush()?;
     println!("✅ Top 100 active tickers written to: {}", output_file);
-    Ok(())
-}
 
-/// Generate a heatmap from the latest top 100 active tickers CSV file
-fn generate_heatmap_from_latest() -> Result<()> {
-    use std::fs;
-
-    // Find the latest top 100 CSV file
-    let entries = fs::read_dir("output")?
-        .filter_map(|entry| entry.ok())
-        .filter(|entry| {
-            entry.path()
-                .to_str()
-                .map(|s| s.contains("top_100_active_"))
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
-
-    let latest_file = entries
-        .iter()
-        .max_by_key(|entry| entry.metadata().unwrap().modified().unwrap())
-        .ok_or_else(|| anyhow::anyhow!("No top 100 CSV files found in output directory"))?;
-
-    println!("Reading from latest file: {:?}", latest_file.path());
-
-    // Read and parse the CSV
-    let mut rdr = csv::Reader::from_path(latest_file.path())?;
-    let mut results = Vec::new();
-
-    for record in rdr.records() {
-        let record = record?;
-        if let Ok(market_cap) = record[4].parse::<f64>() { // Market Cap (EUR) is at index 4
-            results.push((
-                market_cap,
-                record.iter().map(|s| s.to_string()).collect()
-            ));
-        }
-    }
-
-    // Generate the heatmap
+    // Generate heatmap from the new file
+    let results = read_csv_with_market_cap(std::path::Path::new(&output_file))?;
     generate_market_heatmap(&results, "output/market_heatmap.png")?;
-    println!("✅ Market heatmap generated from latest top 100 active tickers");
+    println!("✅ Market heatmap generated");
 
     Ok(())
 }
