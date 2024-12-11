@@ -5,11 +5,13 @@ mod viz;
 mod config;
 mod utils;
 
-use std::{collections::HashMap, env, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc, time::Duration};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use csv::Writer;
 use dotenv::dotenv;
+use futures::future::join_all;
+use indicatif::ProgressBar;
 use tokio;
 
 pub use utils::convert_currency;
@@ -371,78 +373,84 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         "Timestamp",
     ])?;
 
-    // Collect all results first
+    // Create a rate_map Arc for sharing between tasks
+    let rate_map = Arc::new(rate_map);
+    let total_tickers = tickers.len();
+    
+    // Process tickers in parallel with progress tracking
     let mut results = Vec::new();
-    for ticker in tickers {
-        println!("Fetching data for {}", ticker);
-        match fmp_client.get_details(&ticker, &rate_map).await {
-            Ok(details) => {
-                let original_market_cap = details.market_cap.unwrap_or(0.0);
-                let currency = details.currency_symbol.clone().unwrap_or_default();
-                let eur_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "EUR", &rate_map);
-                let usd_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "USD", &rate_map);
-                
-                results.push((
-                    eur_market_cap,
-                    vec![
-                        details.ticker,
-                        details.name.unwrap_or_default(),
-                        original_market_cap.round().to_string(),
-                        currency,
-                        eur_market_cap.round().to_string(),
-                        usd_market_cap.round().to_string(),
-                        details.extra.get("exchange").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        details.extra.get("price").map(|v| v.to_string()).unwrap_or_default(),
-                        details.active.map(|a| a.to_string()).unwrap_or_default(),
-                        details.description.unwrap_or_default(),
-                        details.homepage_url.unwrap_or_default(),
-                        details.employees.unwrap_or_default(),
-                        details.revenue.map(|r| r.to_string()).unwrap_or_default(),
-                        details.revenue_usd.map(|r| r.to_string()).unwrap_or_default(),
-                        details.working_capital_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.quick_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                        details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.debt_equity_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                        details.timestamp.unwrap_or_default(),
-                    ]
-                ));
-                println!("✅ Data collected");
+    let progress = indicatif::ProgressBar::new(total_tickers as u64);
+    progress.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+
+    // Create chunks of tickers to process in parallel
+    // Process 50 tickers at a time to stay well within rate limits
+    for chunk in tickers.chunks(50) {
+        let chunk_futures = chunk.iter().map(|ticker| {
+            let rate_map = rate_map.clone();
+            let ticker = ticker.to_string();
+            let progress = progress.clone();
+            
+            async move {
+                let result = match fmp_client.get_details(&ticker, &rate_map).await {
+                    Ok(details) => {
+                        let original_market_cap = details.market_cap.unwrap_or(0.0);
+                        let currency = details.currency_symbol.clone().unwrap_or_default();
+                        let eur_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "EUR", &rate_map);
+                        let usd_market_cap = crate::utils::convert_currency(original_market_cap, &currency, "USD", &rate_map);
+                        
+                        Some((
+                            eur_market_cap,
+                            vec![
+                                details.ticker,
+                                details.name.unwrap_or_default(),
+                                original_market_cap.round().to_string(),
+                                currency,
+                                eur_market_cap.round().to_string(),
+                                usd_market_cap.round().to_string(),
+                                details.extra.get("exchange").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                                details.extra.get("price").map(|v| v.to_string()).unwrap_or_default(),
+                                details.active.map(|a| a.to_string()).unwrap_or_default(),
+                                details.description.unwrap_or_default(),
+                                details.homepage_url.unwrap_or_default(),
+                                details.employees.unwrap_or_default(),
+                                details.revenue.map(|r| r.to_string()).unwrap_or_default(),
+                                details.revenue_usd.map(|r| r.to_string()).unwrap_or_default(),
+                                details.working_capital_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                                details.quick_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                                details.eps.map(|r| r.to_string()).unwrap_or_default(),
+                                details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                                details.debt_equity_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                                details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                                details.timestamp.unwrap_or_default(),
+                            ]
+                        ))
+                    }
+                    Err(e) => {
+                        eprintln!("Error fetching data for {}: {}", ticker, e);
+                        None
+                    }
+                };
+                progress.inc(1);
+                result
             }
-            Err(e) => {
-                eprintln!("Error fetching data for {}: {}", ticker, e);
-                results.push((
-                    0.0,
-                    vec![
-                        ticker.to_string(),
-                        "ERROR".to_string(),
-                        "0".to_string(),
-                        "".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        format!("Error: {}", e),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                    ]
-                ));
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        });
+
+        // Wait for the current chunk to complete
+        let chunk_results: Vec<_> = futures::future::join_all(chunk_futures).await;
+        results.extend(chunk_results.into_iter().flatten());
     }
 
+    progress.finish_with_message("Data collection complete");
+
     // Sort by market cap (EUR)
-    results.sort_by(|(a_cap, _), (b_cap, _)| b_cap.partial_cmp(a_cap).unwrap_or(std::cmp::Ordering::Equal));
+    results.sort_by(|(a_cap, _): &(f64, Vec<String>), (b_cap, _)| {
+        b_cap.partial_cmp(a_cap).unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // Write all results
     for (_, record) in &results {

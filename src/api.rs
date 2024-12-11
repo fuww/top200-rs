@@ -6,6 +6,8 @@ use serde_json::{self, Value};
 use std::{env, time::Duration};
 use tokio::time::sleep;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 use crate::models::{Details, PolygonResponse, FMPCompanyProfile, FMPRatios, FMPIncomeStatement};
 use crate::convert_currency;
@@ -18,13 +20,68 @@ pub struct PolygonClient {
 pub struct FMPClient {
     client: Client,
     api_key: String,
+    rate_limiter: Arc<Semaphore>,
 }
 
 impl FMPClient {
     pub fn new(api_key: String) -> Self {
+        // Reduce concurrent requests to 100 to stay well within the rate limit
+        let rate_limiter = Arc::new(Semaphore::new(100));
+        
         Self {
             client: Client::new(),
             api_key,
+            rate_limiter,
+        }
+    }
+
+    async fn make_request<T: for<'de> Deserialize<'de>>(&self, url: String) -> Result<T> {
+        let mut retries = 0;
+        let max_retries = 3;
+        let mut delay = Duration::from_secs(5);
+
+        loop {
+            // Wait for rate limit permit
+            self.rate_limiter.acquire().await.unwrap();
+
+            let response = self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .context("Failed to send request")?;
+
+            // Get the response text first to log in case of error
+            let text = response.text().await.context("Failed to get response text")?;
+            
+            // Check for rate limit error
+            if text.contains("Limit Reach") {
+                if retries >= max_retries {
+                    return Err(anyhow::anyhow!("Rate limit reached after {} retries", max_retries));
+                }
+                eprintln!("Rate limit hit for {}. Retrying in {} seconds...", url, delay.as_secs());
+                sleep(delay).await;
+                delay *= 2; // Exponential backoff
+                retries += 1;
+                continue;
+            }
+
+            match serde_json::from_str::<T>(&text) {
+                Ok(result) => {
+                    // Schedule permit release after 200ms
+                    let rate_limiter = self.rate_limiter.clone();
+                    tokio::spawn(async move {
+                        sleep(Duration::from_millis(200)).await;
+                        rate_limiter.add_permits(1);
+                    });
+                    return Ok(result);
+                }
+                Err(e) => {
+                    eprintln!("Failed to parse response for URL {}: {}", url, e);
+                    eprintln!("Response text: {}", text);
+                    return Err(anyhow::anyhow!("Failed to parse response: {}", e));
+                }
+            }
         }
     }
 
@@ -33,26 +90,29 @@ impl FMPClient {
             anyhow::bail!("ticker empty");
         }
 
-        // Add a small delay to stay within 300 calls/min limit
-        sleep(Duration::from_millis(200)).await;
-
-        let url = format!(
+        // Prepare URLs for all three requests
+        let profile_url = format!(
             "https://financialmodelingprep.com/api/v3/profile/{}?apikey={}",
             ticker,
             self.api_key
         );
+        let ratios_url = format!(
+            "https://financialmodelingprep.com/api/v3/ratios/{}?apikey={}",
+            ticker,
+            self.api_key
+        );
+        let income_url = format!(
+            "https://financialmodelingprep.com/api/v3/income-statement/{}?limit=1&apikey={}",
+            ticker,
+            self.api_key
+        );
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let profiles: Vec<FMPCompanyProfile> = response
-            .json()
-            .await
-            .context("Failed to parse response")?;
+        // Make all three requests in parallel
+        let (profiles, ratios, income_statements) = tokio::try_join!(
+            self.make_request::<Vec<FMPCompanyProfile>>(profile_url),
+            self.make_request::<Vec<FMPRatios>>(ratios_url),
+            self.make_request::<Vec<FMPIncomeStatement>>(income_url)
+        )?;
 
         if profiles.is_empty() {
             anyhow::bail!("No data found for ticker");
@@ -60,6 +120,8 @@ impl FMPClient {
 
         let profile = &profiles[0];
         let currency = profile.currency.as_str();
+        let ratios = ratios.first().cloned();
+        let income = income_statements.first().cloned();
 
         // Get current timestamp in ISO 8601 format
         let timestamp = chrono::Utc::now().to_rfc3339();
@@ -73,17 +135,17 @@ impl FMPClient {
             active: Some(profile.is_active),
             description: Some(profile.description.clone()),
             homepage_url: Some(profile.website.clone()),
-            weighted_shares_outstanding: None,  // Not available in FMP API
+            weighted_shares_outstanding: None,
             employees: profile.employees.clone(),
-            revenue: None,
+            revenue: income.as_ref().and_then(|i| i.revenue),
             revenue_usd: None,
             timestamp: Some(timestamp),
-            working_capital_ratio: None,
-            quick_ratio: None,
-            eps: None,
-            pe_ratio: None,
-            debt_equity_ratio: None,
-            roe: None,
+            working_capital_ratio: ratios.as_ref().and_then(|r| r.current_ratio),
+            quick_ratio: ratios.as_ref().and_then(|r| r.quick_ratio),
+            eps: ratios.as_ref().and_then(|r| r.eps),
+            pe_ratio: ratios.as_ref().and_then(|r| r.price_earnings_ratio),
+            debt_equity_ratio: ratios.as_ref().and_then(|r| r.debt_equity_ratio),
+            roe: ratios.as_ref().and_then(|r| r.return_on_equity),
             extra: {
                 let mut map = std::collections::HashMap::new();
                 map.insert("exchange".to_string(), Value::String(profile.exchange.clone()));
@@ -92,29 +154,10 @@ impl FMPClient {
             },
         };
 
-        // Fetch ratios and income statement
-        let ratios = self.get_ratios(ticker).await?;
-        let income = self.get_income_statement(ticker).await?;
-
         // Calculate revenue in USD if available
-        let revenue = income.as_ref().and_then(|i| i.revenue);
-        let revenue_usd = revenue.map(|rev| {
-            convert_currency(
-                rev,
-                &profile.currency,
-                "USD",
-                rate_map,
-            )
-        });
-
-        details.revenue = revenue;
-        details.revenue_usd = revenue_usd;
-        details.working_capital_ratio = ratios.as_ref().and_then(|r| r.current_ratio);
-        details.quick_ratio = ratios.as_ref().and_then(|r| r.quick_ratio);
-        details.eps = ratios.as_ref().and_then(|r| r.eps);
-        details.pe_ratio = ratios.as_ref().and_then(|r| r.price_earnings_ratio);
-        details.debt_equity_ratio = ratios.as_ref().and_then(|r| r.debt_equity_ratio);
-        details.roe = ratios.as_ref().and_then(|r| r.return_on_equity);
+        if let Some(rev) = details.revenue {
+            details.revenue_usd = Some(convert_currency(rev, currency, "USD", rate_map));
+        }
 
         Ok(details)
     }
@@ -123,9 +166,6 @@ impl FMPClient {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
         }
-
-        // Add a small delay to stay within rate limit
-        sleep(Duration::from_millis(200)).await;
 
         let url = format!(
             "https://financialmodelingprep.com/api/v3/ratios/{}?apikey={}",
@@ -158,9 +198,6 @@ impl FMPClient {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
         }
-
-        // Add a small delay to stay within rate limit
-        sleep(Duration::from_millis(200)).await;
 
         let url = format!(
             "https://financialmodelingprep.com/api/v3/income-statement/{}?limit=1&apikey={}",
@@ -204,37 +241,6 @@ impl FMPClient {
         let rates: Vec<ExchangeRate> = response.json().await?;
         Ok(rates)
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ExchangeRate {
-    pub name: String,
-    pub price: f64,
-    #[serde(rename = "changesPercentage")]
-    pub changes_percentage: Option<f64>,
-    pub change: Option<f64>,
-    #[serde(rename = "dayLow")]
-    pub day_low: Option<f64>,
-    #[serde(rename = "dayHigh")]
-    pub day_high: Option<f64>,
-    #[serde(rename = "yearHigh")]
-    pub year_high: Option<f64>,
-    #[serde(rename = "yearLow")]
-    pub year_low: Option<f64>,
-    #[serde(rename = "marketCap")]
-    pub market_cap: Option<f64>,
-    #[serde(rename = "priceAvg50")]
-    pub price_avg_50: Option<f64>,
-    #[serde(rename = "priceAvg200")]
-    pub price_avg_200: Option<f64>,
-    pub volume: Option<f64>,
-    #[serde(rename = "avgVolume")]
-    pub avg_volume: Option<f64>,
-    pub exchange: Option<String>,
-    pub open: Option<f64>,
-    #[serde(rename = "previousClose")]
-    pub previous_close: Option<f64>,
-    pub timestamp: i64,
 }
 
 impl PolygonClient {
@@ -287,4 +293,35 @@ pub async fn get_details_eu(ticker: &str, rate_map: &HashMap<String, f64>) -> Re
     let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
     let client = FMPClient::new(api_key);
     client.get_details(ticker, rate_map).await
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExchangeRate {
+    pub name: String,
+    pub price: f64,
+    #[serde(rename = "changesPercentage")]
+    pub changes_percentage: Option<f64>,
+    pub change: Option<f64>,
+    #[serde(rename = "dayLow")]
+    pub day_low: Option<f64>,
+    #[serde(rename = "dayHigh")]
+    pub day_high: Option<f64>,
+    #[serde(rename = "yearHigh")]
+    pub year_high: Option<f64>,
+    #[serde(rename = "yearLow")]
+    pub year_low: Option<f64>,
+    #[serde(rename = "marketCap")]
+    pub market_cap: Option<f64>,
+    #[serde(rename = "priceAvg50")]
+    pub price_avg_50: Option<f64>,
+    #[serde(rename = "priceAvg200")]
+    pub price_avg_200: Option<f64>,
+    pub volume: Option<f64>,
+    #[serde(rename = "avgVolume")]
+    pub avg_volume: Option<f64>,
+    pub exchange: Option<String>,
+    pub open: Option<f64>,
+    #[serde(rename = "previousClose")]
+    pub previous_close: Option<f64>,
+    pub timestamp: i64,
 }

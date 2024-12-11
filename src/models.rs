@@ -68,31 +68,24 @@ pub struct FMPCompanyProfile {
     pub extra: std::collections::HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FMPRatios {
     pub symbol: String,
-    #[serde(rename = "currentRatio")]
     pub current_ratio: Option<f64>,
-    #[serde(rename = "quickRatio")]
     pub quick_ratio: Option<f64>,
-    #[serde(rename = "eps")]
     pub eps: Option<f64>,
-    #[serde(rename = "priceEarningsRatio")]
     pub price_earnings_ratio: Option<f64>,
-    #[serde(rename = "debtEquityRatio")]
     pub debt_equity_ratio: Option<f64>,
-    #[serde(rename = "returnOnEquity")]
     pub return_on_equity: Option<f64>,
     // Add catch-all for other fields
     #[serde(flatten)]
     pub extra: std::collections::HashMap<String, Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct FMPIncomeStatement {
-    pub symbol: String,
     pub date: String,
-    #[serde(rename = "revenue")]
+    pub symbol: String,
     pub revenue: Option<f64>,
     // Add catch-all for other fields
     #[serde(flatten)]
