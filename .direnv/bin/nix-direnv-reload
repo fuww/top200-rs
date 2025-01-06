@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 set -e
-if [[ ! -d "/home/joost/git/top200-rs" ]]; then
+if [[ ! -d "/Users/joost/git/top200-rs" ]]; then
   echo "Cannot find source directory; Did you move it?"
-  echo "(Looking for "/home/joost/git/top200-rs")"
+  echo "(Looking for "/Users/joost/git/top200-rs")"
   echo 'Cannot force reload with this script - use "direnv reload" manually and then try again'
   exit 1
 fi
 
 # rebuild the cache forcefully
-_nix_direnv_force_reload=1 direnv exec "/home/joost/git/top200-rs" true
+_nix_direnv_force_reload=1 direnv exec "/Users/joost/git/top200-rs" true
 
 # Update the mtime for .envrc.
 # This will cause direnv to reload again - but without re-building.
-touch "/home/joost/git/top200-rs/.envrc"
+touch "/Users/joost/git/top200-rs/.envrc"
 
 # Also update the timestamp of whatever profile_rc we have.
 # This makes sure that we know we are up to date.
-touch -r "/home/joost/git/top200-rs/.envrc" "/home/joost/git/top200-rs/.direnv"/*.rc
+touch -r "/Users/joost/git/top200-rs/.envrc" "/Users/joost/git/top200-rs/.direnv"/*.rc

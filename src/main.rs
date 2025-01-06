@@ -1,57 +1,72 @@
 mod api;
 mod models;
-mod tui;
 mod viz;
 mod config;
 mod utils;
 
-use std::{collections::HashMap, env, path::PathBuf, time::Duration};
+use std::{collections::HashMap, env, path::PathBuf};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
+use clap::{Parser, ValueEnum};
 use csv::Writer;
 use dotenv::dotenv;
 use tokio;
 
 pub use utils::convert_currency;
 
+#[derive(Debug, Clone, ValueEnum, Default)]
+enum Command {
+    #[default]
+    /// Export combined US & non-US stock marketcaps to CSV & generate treemap
+    ExportCombined,
+    /// Export currency exchange rates to CSV
+    ExportRates,
+    /// List US stock marketcaps (Polygon API)
+    ListUs,
+    /// List EU stock marketcaps
+    ListEu,
+    /// Export US stock marketcaps to CSV
+    ExportUs,
+    /// Export EU stock marketcaps to CSV
+    ExportEu,
+    /// Generate Market Heatmap
+    Heatmap,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Command to execute (defaults to export-combined)
+    #[arg(value_enum, default_value_t = Command::ExportCombined)]
+    command: Command,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
 
-    let options = vec![
-        "Export combined US & non-US stock marketcaps to CSV & generate treemap".to_string(),
-        "Export currency exchange rates to CSV".to_string(),
-        "List US stock marketcaps (Polygon API)".to_string(),
-        "List EU stock marketcaps".to_string(),
-        "Export US stock marketcaps to CSV".to_string(),
-        "Export EU stock marketcaps to CSV".to_string(),
-        "Generate Market Heatmap".to_string(),
-        "Exit".to_string(),
-    ];
+    let args = Args::parse();
 
-    let selected = tui::start_tui(options)?;
-
-    match selected {
-        Some(ans) => match ans.as_str() {
-            "Export combined US & non-US stock marketcaps to CSV & generate treemap" => {
-                let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
-                let fmp_client = api::FMPClient::new(api_key);
-                export_details_combined_csv(&fmp_client).await?;
-            }
-            "Export currency exchange rates to CSV" => {
-                let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
-                let fmp_client = api::FMPClient::new(api_key);
-                export_exchange_rates_csv(&fmp_client).await?;
-            }
-            "List US stock marketcaps (Polygon API)" => list_details_us().await?,
-            "List EU stock marketcaps" => list_details_eu().await?,
-            "Export US stock marketcaps to CSV" => export_details_us_csv().await?,
-            "Export EU stock marketcaps to CSV" => export_details_eu_csv().await?,
-            "Generate Market Heatmap" => export_details_combined_csv(&api::FMPClient::new(env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set"))).await?,
-            "Exit" => println!("Exiting..."),
-            _ => unreachable!(),
-        },
-        None => println!("Exiting..."),
+    match args.command {
+        Command::ExportCombined => {
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let fmp_client = api::FMPClient::new(api_key);
+            export_details_combined_csv(&fmp_client).await?;
+        }
+        Command::ExportRates => {
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let fmp_client = api::FMPClient::new(api_key);
+            export_exchange_rates_csv(&fmp_client).await?;
+        }
+        Command::ListUs => list_details_us().await?,
+        Command::ListEu => list_details_eu().await?,
+        Command::ExportUs => export_details_us_csv().await?,
+        Command::ExportEu => export_details_eu_csv().await?,
+        Command::Heatmap => {
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let fmp_client = api::FMPClient::new(api_key);
+            export_details_combined_csv(&fmp_client).await?;
+        }
     }
 
     Ok(())
@@ -338,74 +353,21 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         rate_map.insert(rate.name.clone(), rate.price);
     }
 
-    // Helper function to convert currency symbol to code and get divisor
-    let currency_to_code = |currency: &str| -> (String, f64) {
-        match currency {
-            "€" => ("EUR".to_string(), 1.0),
-            "$" => ("USD".to_string(), 1.0),
-            "£" => ("GBP".to_string(), 1.0),
-            "¥" => ("JPY".to_string(), 1.0),
-            "₣" => ("CHF".to_string(), 1.0),
-            "kr" => ("SEK".to_string(), 1.0),
-            "GBp" => ("GBP".to_string(), 100.0),  // Convert pence to pounds
-            "GBX" => ("GBP".to_string(), 100.0),  // Alternative notation for pence
-            _ => (currency.to_string(), 1.0)
-        }
-    };
+    // Create output directory if it doesn't exist
+    let output_dir = PathBuf::from("output");
+    std::fs::create_dir_all(&output_dir)?;
 
-    // Helper function to convert amount from source currency to target currency
-    let convert_currency = |amount: f64, from_currency: &str, to_currency: &str| -> f64 {
-        let (from_code, from_divisor) = currency_to_code(from_currency);
-        let amount = amount / from_divisor; // Convert to main currency unit if needed
-        
-        if from_code == to_currency {
-            amount
-        } else {
-            // First try direct conversion
-            let pair = format!("{}/{}", from_code, to_currency);
-            if let Some(&rate) = rate_map.get(&pair) {
-                amount * rate
-            } else {
-                // Try inverse conversion
-                let inverse_pair = format!("{}/{}", to_currency, from_code);
-                if let Some(&rate) = rate_map.get(&inverse_pair) {
-                    amount / rate
-                } else {
-                    // If no direct conversion exists, try through USD
-                    let to_usd = format!("{}/USD", from_code);
-                    let usd_to_target = rate_map.get(&format!("USD/{}", to_currency)).copied().unwrap_or_else(|| {
-                        if to_currency == "EUR" {
-                            0.92 // Fallback USD to EUR
-                        } else {
-                            1.0 // Fallback for USD
-                        }
-                    });
-                    
-                    if let Some(&rate) = rate_map.get(&to_usd) {
-                        amount * rate * usd_to_target
-                    } else {
-                        println!("⚠️  Warning: No conversion rate found for {} to {}", from_currency, to_currency);
-                        amount // Return unconverted amount as fallback
-                    }
-                }
-            }
-        }
-    };
-
-    // Convert exchange prefixes to FMP format
+    // Create CSV file with timestamp
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("output/combined_marketcaps_{}.csv", timestamp);
-    let file = std::fs::File::create(&filename)?;
-    let mut writer = csv::Writer::from_writer(file);
+    let csv_path = output_dir.join(format!("combined_marketcaps_{}.csv", timestamp));
+    let mut writer = Writer::from_path(&csv_path)?;
 
-    // Write headers
+    // Write header
     writer.write_record(&[
         "Ticker",
-        "Name",
-        "Market Cap (Original)",
-        "Original Currency",
-        "Market Cap (EUR)",
+        "Company Name",
         "Market Cap (USD)",
+        "Currency",
         "Exchange",
         "Price",
         "Active",
@@ -422,90 +384,77 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         "ROE",
     ])?;
 
-    // Collect all results first
+    // Process tickers sequentially since we can't clone FMPClient
     let mut results = Vec::new();
     for ticker in tickers {
-        println!("Fetching data for {}", ticker);
         match fmp_client.get_details(&ticker, &rate_map).await {
             Ok(details) => {
-                let original_market_cap = details.market_cap.unwrap_or(0.0);
-                let currency = details.currency_symbol.clone().unwrap_or_default();
-                let eur_market_cap = convert_currency(original_market_cap, &currency, "EUR");
-                let usd_market_cap = convert_currency(original_market_cap, &currency, "USD");
-                
-                results.push((
-                    eur_market_cap,
-                    vec![
-                        details.ticker,
-                        details.name.unwrap_or_default(),
-                        original_market_cap.round().to_string(),
-                        currency,
-                        eur_market_cap.round().to_string(),
-                        usd_market_cap.round().to_string(),
-                        details.extra.get("exchange").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        details.extra.get("price").map(|v| v.to_string()).unwrap_or_default(),
-                        details.active.map(|a| a.to_string()).unwrap_or_default(),
-                        details.description.unwrap_or_default(),
-                        details.homepage_url.unwrap_or_default(),
-                        details.employees.unwrap_or_default(),
-                        details.revenue.map(|r| r.to_string()).unwrap_or_default(),
-                        details.revenue_usd.map(|r| r.to_string()).unwrap_or_default(),
-                        details.working_capital_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.quick_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                        details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.debt_equity_ratio.map(|r| r.to_string()).unwrap_or_default(),
-                        details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                    ]
-                ));
-                println!("✅ Data collected");
+                let market_cap_usd = if let Some(market_cap) = details.market_cap {
+                    if let Some(currency) = &details.currency_name {
+                        utils::convert_currency(market_cap, currency, "USD", &rate_map)
+                    } else {
+                        market_cap // Assume USD if no currency specified
+                    }
+                } else {
+                    0.0
+                };
+
+                if market_cap_usd > 0.0 {  // Only include companies with valid market cap
+                    results.push((
+                        market_cap_usd,
+                        vec![
+                            ticker.clone(),
+                            details.name.unwrap_or_default(),
+                            market_cap_usd.to_string(),
+                            details.currency_name.unwrap_or_default(),
+                            details.extra.get("exchange").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                            details.extra.get("price").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                            details.active.map(|a| a.to_string()).unwrap_or_default(),
+                            details.description.unwrap_or_default(),
+                            details.homepage_url.unwrap_or_default(),
+                            details.employees.map(|e| e.to_string()).unwrap_or_default(),
+                            details.revenue.map(|r| r.to_string()).unwrap_or_default(),
+                            details.revenue_usd.map(|r| r.to_string()).unwrap_or_default(),
+                            details.working_capital_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                            details.quick_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                            details.eps.map(|r| r.to_string()).unwrap_or_default(),
+                            details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                            details.debt_equity_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                            details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                        ],
+                    ));
+                    println!("✅ Processed {}", ticker);
+                } else {
+                    eprintln!("Skipping {} - No valid market cap data", ticker);
+                }
             }
             Err(e) => {
-                eprintln!("Error fetching data for {}: {}", ticker, e);
-                results.push((
-                    0.0,
-                    vec![
-                        ticker.to_string(),
-                        "ERROR".to_string(),
-                        "0".to_string(),
-                        "".to_string(),
-                        "0".to_string(),
-                        "0".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        format!("Error: {}", e),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                        "".to_string(),
-                    ]
-                ));
+                eprintln!("Error processing {}: {}", ticker, e);
+                // Continue processing other tickers
             }
         }
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        
+        // Add a small delay to stay within rate limits
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     }
 
-    // Sort by EUR market cap (highest to lowest)
+    // Sort by market cap (highest to lowest)
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
     // Write sorted results to CSV
-    for (_, record) in &results {  
-        writer.write_record(&*record)?;  // Dereference to get &[String]
+    for (_, record) in &results {
+        writer.write_record(&*record)?;
     }
 
-    println!("📝 CSV file created: {}", filename);
-    println!("💶 Results are sorted by market cap in EUR (highest to lowest)");
+    println!("📝 CSV file created: {}", csv_path.display());
+    println!("💰 Results are sorted by market cap in USD (highest to lowest)");
 
     // Generate heatmap
-    println!("\nGenerating market heatmap...");
-    let heatmap_filename = format!("output/heatmap_{}.png", timestamp);
-    generate_market_heatmap(&results, &heatmap_filename)?;
-    println!("🎨 Heatmap generated: {}", heatmap_filename);
+    if let Err(e) = generate_market_heatmap(&results, "output/market_heatmap.svg") {
+        eprintln!("Warning: Failed to generate heatmap: {}", e);
+    } else {
+        println!("📊 Market heatmap generated: output/market_heatmap.svg");
+    }
 
     Ok(())
 }

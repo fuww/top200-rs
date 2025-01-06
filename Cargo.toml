@@ -18,3 +18,4 @@ crossterm = "0.27.0"
 plotters = "0.3.7"
 confy = "0.5.1"
 toml = "0.8.8"
+clap = { version = "4.4.12", features = ["derive"] }
