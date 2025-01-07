@@ -18,18 +18,35 @@ jobs:
         nix_path: nixpkgs=channel:nixos-24.11
         extra_nix_config: |
           experimental-features = nix-command flakes
+          connect-timeout = 60
+          stalled-download-timeout = 300
 
     - uses: cachix/cachix-action@v13
       with:
         name: fashionunited
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        skipPush: true
 
     - name: Run unit tests with coverage
       run: |
-        nix \
-          --extra-experimental-features "nix-command flakes" \
-          develop \
-          --command bash -c "cargo install cargo-tarpaulin && cargo tarpaulin --out lcov --output-dir coverage"
+        # Retry logic for nix develop
+        max_attempts=3
+        attempt=1
+        while [ $attempt -le $max_attempts ]; do
+          if nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "cargo install cargo-tarpaulin && cargo tarpaulin --out lcov --output-dir coverage"; then
+            break
+          fi
+          echo "Attempt $attempt failed. Waiting before retry..."
+          sleep 30
+          attempt=$((attempt + 1))
+        done
+        if [ $attempt -gt $max_attempts ]; then
+          echo "All attempts failed"
+          exit 1
+        fi
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
@@ -40,10 +57,24 @@ jobs:
 
     - name: Run unit tests
       run: |
-        nix \
-          --extra-experimental-features "nix-command flakes" \
-          develop \
-          --command bash -c "cargo test"
+        # Retry logic for nix develop
+        max_attempts=3
+        attempt=1
+        while [ $attempt -le $max_attempts ]; do
+          if nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "cargo test"; then
+            break
+          fi
+          echo "Attempt $attempt failed. Waiting before retry..."
+          sleep 30
+          attempt=$((attempt + 1))
+        done
+        if [ $attempt -gt $max_attempts ]; then
+          echo "All attempts failed"
+          exit 1
+        fi
 
   check:
     name: 'Static Analysis: cargo check'
@@ -59,6 +90,8 @@ jobs:
         nix_path: nixpkgs=channel:nixos-24.11
         extra_nix_config: |
           experimental-features = nix-command flakes
+          connect-timeout = 60
+          stalled-download-timeout = 300
 
     - uses: cachix/cachix-action@v13
       with:
@@ -177,6 +210,8 @@ jobs:
         nix_path: nixpkgs=channel:nixos-24.11
         extra_nix_config: |
           experimental-features = nix-command flakes
+          connect-timeout = 60
+          stalled-download-timeout = 300
 
     - uses: cachix/cachix-action@v13
       with:
@@ -247,6 +282,8 @@ jobs:
         nix_path: nixpkgs=channel:nixos-24.11
         extra_nix_config: |
           experimental-features = nix-command flakes
+          connect-timeout = 60
+          stalled-download-timeout = 300
 
     - uses: cachix/cachix-action@v13
       with:
@@ -285,6 +322,8 @@ jobs:
         nix_path: nixpkgs=channel:nixos-24.11
         extra_nix_config: |
           experimental-features = nix-command flakes
+          connect-timeout = 60
+          stalled-download-timeout = 300
 
     - uses: cachix/cachix-action@v13
       with:
