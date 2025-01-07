@@ -73,6 +73,7 @@ pub struct FMPCompanyProfile {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct FMPRatios {
     pub symbol: String,
     pub current_ratio: Option<f64>,
@@ -87,6 +88,7 @@ pub struct FMPRatios {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct FMPIncomeStatement {
     pub date: String,
     pub symbol: String,
@@ -117,6 +119,7 @@ pub struct Stock {
     pub roe: f64,
 }
 
+#[allow(dead_code)]
 fn default_string() -> String {
     "0".to_string()
 }

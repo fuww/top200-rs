@@ -11,5 +11,9 @@
         "**/*tsconfig.json": true,
         ".cache": true,
         "retool.config.json": true
+    },
+    "[rust]": {
+        "editor.defaultFormatter": "rust-lang.rust-analyzer",
+        "editor.formatOnSave": true
     }
 }

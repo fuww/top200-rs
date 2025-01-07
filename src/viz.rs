@@ -5,7 +5,8 @@
 use anyhow::Result;
 use plotters::prelude::*;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StockData {
     pub symbol: String,
     pub market_cap_eur: f64,
@@ -237,13 +238,13 @@ pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Resul
                 (rect.x, rect.y),
                 (rect.x + rect.width, rect.y + rect.height),
             ],
-            Into::<ShapeStyle>::into(&BLACK).stroke_width(1),
+            Into::<ShapeStyle>::into(BLACK).stroke_width(1),
         );
         root.draw(&border)?;
 
         // Calculate font size based on rectangle size
         let min_dimension = rect.width.min(rect.height);
-        let font_size = ((min_dimension as f32 * 0.2) as i32).min(32).max(10);
+        let font_size = ((min_dimension as f32 * 0.2) as i32).clamp(10, 32);
         let text_style = ("sans-serif", font_size as u32).into_font().color(&BLACK);
 
         // Draw text if rectangle is large enough

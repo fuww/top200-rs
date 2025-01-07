@@ -55,7 +55,7 @@
           # instead of passing `buildInputs` / `nativeBuildInputs`,
             # we refer to an existing derivation here
             inputsFrom = [ bin ];
-            buildInputs = with pkgs; [ reuse ];
+            buildInputs = with pkgs; [ reuse clippy-sarif sarif-fmt ];
           # buildInputs = with pkgs; [
           #   # Rust toolchain
           #   rustToolchain

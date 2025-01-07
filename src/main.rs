@@ -14,7 +14,12 @@ use clap::{Parser, Subcommand};
 use csv::Writer;
 use dotenvy::dotenv;
 use glob::glob;
-use std::{collections::HashMap, env, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    collections::HashMap,
+    env,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 pub use utils::convert_currency;
 
@@ -380,7 +385,9 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
     // Create a map of currency pairs to rates
     let mut rate_map: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
     for rate in exchange_rates {
-        rate_map.insert(rate.name.clone(), rate.price);
+        if let (Some(name), Some(price)) = (rate.name, rate.price) {
+            rate_map.insert(name, price);
+        }
     }
 
     // Convert exchange prefixes to FMP format
@@ -610,7 +617,7 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
         Ok(rates) => {
             for rate in rates {
                 // Split the symbol into base and quote currencies (e.g., "EUR/USD" -> ["EUR", "USD"])
-                let currencies: Vec<&str> = rate.name.split('/').collect();
+                let currencies: Vec<&str> = rate.name.as_deref().unwrap_or("").split('/').collect();
                 let (base, quote) = if currencies.len() == 2 {
                     (currencies[0], currencies[1])
                 } else {
@@ -618,8 +625,10 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
                 };
 
                 writer.write_record(&[
-                    &rate.name,
-                    &rate.price.to_string(),
+                    rate.name.as_deref().unwrap_or(""),
+                    &rate
+                        .price
+                        .map_or_else(|| "".to_string(), |v| v.to_string()),
                     &rate
                         .changes_percentage
                         .map_or_else(|| "".to_string(), |v| v.to_string()),
@@ -659,6 +668,7 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str) -> Result<()> {
     let mut writer = Writer::from_path(output_path)?;
 
@@ -743,6 +753,7 @@ async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str)
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Result<()> {
     let rate_map = get_rate_map();
     let fmp_client = api::FMPClient::new(
@@ -855,9 +866,7 @@ fn get_rate_map() -> HashMap<String, f64> {
 
 /// Find the latest file in the output directory that matches a pattern
 fn find_latest_file(pattern: &str) -> Result<PathBuf> {
-    let paths: Vec<PathBuf> = glob(pattern)?
-        .filter_map(|entry| entry.ok())
-        .collect();
+    let paths: Vec<PathBuf> = glob(pattern)?.filter_map(|entry| entry.ok()).collect();
 
     let latest_file = paths
         .iter()
@@ -962,9 +971,9 @@ pub fn output_top_100_active() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use approx::assert_relative_eq;
     use std::fs;
     use tempfile::tempdir;
-    use approx::assert_relative_eq;
 
     #[test]
     fn test_cli_parsing() {
@@ -1008,41 +1017,47 @@ mod tests {
         std::env::set_current_dir(&dir_path).unwrap();
 
         let latest = find_latest_file("output/combined_marketcaps_*.csv").unwrap();
-        assert_eq!(latest.canonicalize().unwrap(), latest_file.canonicalize().unwrap());
+        assert_eq!(
+            latest.canonicalize().unwrap(),
+            latest_file.canonicalize().unwrap()
+        );
     }
 
     #[test]
     fn test_get_rate_map() {
         let rate_map = get_rate_map();
-        
+
         // Test that we have some rates
         assert!(!rate_map.is_empty());
         assert!(rate_map.len() > 0);
-        
+
         // Test that we have at least one of the major currencies
-        let has_major_currency = rate_map.contains_key("EUR/USD") || 
-                               rate_map.contains_key("GBP/USD") ||
-                               rate_map.contains_key("JPY/USD");
-        assert!(has_major_currency, "Rate map should contain at least one major currency");
+        let has_major_currency = rate_map.contains_key("EUR/USD")
+            || rate_map.contains_key("GBP/USD")
+            || rate_map.contains_key("JPY/USD");
+        assert!(
+            has_major_currency,
+            "Rate map should contain at least one major currency"
+        );
     }
 
     #[tokio::test]
     async fn test_read_csv_with_market_cap() {
         let dir = tempdir().unwrap();
         let test_file = dir.path().join("test.csv");
-        
+
         // Create a test CSV file with Market Cap column name matching the code
         let csv_content = "\
 Ticker,Company Name,Market Cap (USD),Currency,Exchange,Price
 AAPL,Apple Inc.,3000000000000,USD,NASDAQ,150.0
 MSFT,Microsoft Corp.,2500000000000,USD,NASDAQ,300.0
 GOOGL,Alphabet Inc.,2000000000000,USD,NASDAQ,130.0";
-        
+
         fs::write(&test_file, csv_content).unwrap();
 
         let result = read_csv_with_market_cap(&test_file).unwrap();
         assert_eq!(result.len(), 3);
-        
+
         // Check first entry
         let (market_cap, data) = &result[0];
         assert_relative_eq!(*market_cap, 3000000000000.0, epsilon = 0.01);
@@ -1061,11 +1076,11 @@ GOOGL,Alphabet Inc.,2000000000000,USD,NASDAQ,130.0";
         // Test USD to EUR conversion using relative comparison
         let result = convert_currency(100.0, "USD", "EUR", &rate_map);
         assert_relative_eq!(result, 91.0, epsilon = 0.01);
-        
+
         // Test EUR to USD conversion
         let result = convert_currency(100.0, "EUR", "USD", &rate_map);
         assert_relative_eq!(result, 110.0, epsilon = 0.01);
-        
+
         // Test same currency
         let result = convert_currency(100.0, "USD", "USD", &rate_map);
         assert_relative_eq!(result, 100.0, epsilon = 0.01);

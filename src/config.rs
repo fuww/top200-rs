@@ -44,6 +44,7 @@ pub fn load_config() -> anyhow::Result<Config> {
     Ok(config)
 }
 
+#[allow(dead_code)]
 pub fn save_config(config: &Config) -> anyhow::Result<()> {
     let config_path = get_config_path();
     let config_str = toml::to_string_pretty(config)?;

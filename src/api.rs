@@ -46,7 +46,7 @@ impl FMPClient {
 
         loop {
             // Wait for rate limit permit
-            self.rate_limiter.acquire().await.unwrap();
+            let _permit = self.rate_limiter.acquire().await.unwrap();
 
             let response = self
                 .client
@@ -186,6 +186,7 @@ impl FMPClient {
         Ok(details)
     }
 
+    #[allow(dead_code)]
     pub async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
@@ -220,6 +221,7 @@ impl FMPClient {
         Ok(ratios.into_iter().next())
     }
 
+    #[allow(dead_code)]
     pub async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
@@ -330,9 +332,10 @@ pub async fn get_details_eu(ticker: &str, rate_map: &HashMap<String, f64>) -> Re
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ExchangeRate {
-    pub name: String,
-    pub price: f64,
+    pub name: Option<String>,
+    pub price: Option<f64>,
     #[serde(rename = "changesPercentage")]
     pub changes_percentage: Option<f64>,
     pub change: Option<f64>,
