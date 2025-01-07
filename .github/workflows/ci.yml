@@ -210,48 +210,48 @@ jobs:
           develop \
           --command bash -c "reuse lint"
 
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+  # benchmark:
+  #   name: Benchmark
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
 
-      - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: nightly
-          override: true
+  #     - name: Install stable toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         profile: minimal
+  #         toolchain: nightly
+  #         override: true
 
-      - uses: Swatinem/rust-cache@v2
+  #     - uses: Swatinem/rust-cache@v2
 
-      - name: Run cargo bench
-        # note that we explictly have to mention which benches to run, because
-        # otherwise 
-        run:
-          cargo +nightly bench
-            --bench shuffle
-            --bench encrypt
-            -- --output-format bencher | tee output.txt
+  #     - name: Run cargo bench
+  #       # note that we explictly have to mention which benches to run, because
+  #       # otherwise 
+  #       run:
+  #         cargo +nightly bench
+  #           --bench shuffle
+  #           --bench encrypt
+  #           -- --output-format bencher | tee output.txt
 
-      - name: Download previous benchmark data
-        uses: actions/cache@v3
-        with:
-          path: ./cache
-          key: cargo-bench
+  #     - name: Download previous benchmark data
+  #       uses: actions/cache@v3
+  #       with:
+  #         path: ./cache
+  #         key: cargo-bench
 
-      - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          name: cargo-bench
-          tool: 'cargo'
-          output-file-path: ./output.txt
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          external-data-json-path: ./cache/benchmark-data.json
-          alert-threshold: '150%'
-          comment-on-alert: true
-          fail-on-alert: false
+  #     - name: Store benchmark result
+  #       uses: benchmark-action/github-action-benchmark@v1
+  #       with:
+  #         name: cargo-bench
+  #         tool: 'cargo'
+  #         output-file-path: ./output.txt
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         external-data-json-path: ./cache/benchmark-data.json
+  #         alert-threshold: '150%'
+  #         comment-on-alert: true
+  #         fail-on-alert: false
 
   nix_flake_info:
     name: Register Nix Flake Information
