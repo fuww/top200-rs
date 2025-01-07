@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+
+SPDX-License-Identifier: AGPL-3.0-only
+-->
+
 [![CI](https://github.com/javdl/top200-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/javdl/top200-rs/actions/workflows/ci.yml)[![Daily Data Collection](https://github.com/javdl/top200-rs/actions/workflows/daily-run.yml/badge.svg)](https://github.com/javdl/top200-rs/actions/workflows/daily-run.yml)
 
 # top200-rs
@@ -8,8 +14,13 @@
 
 ## License
 
+To set license and copyright information, run:
+
 ```sh
-reuse annotate --copyright="Joost van der Laan <joost@fashionunited.com>" --license="AGPL-3.0-only" --skip-unrecognised src/*  
+reuse annotate --copyright="Joost van der Laan <joost@fashionunited.com>" --license="AGPL-3.0-only" --skip-unrecognised *
+
+# or to check if all files are annotated correctly
+reuse lint
 ```
 
 ## Changelog
