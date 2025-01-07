@@ -4,6 +4,7 @@
 
 mod api;
 mod config;
+mod histogram;
 mod models;
 mod utils;
 mod viz;
@@ -17,8 +18,9 @@ use glob::glob;
 use std::{
     collections::HashMap,
     env,
+    fs,
+    io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 pub use utils::convert_currency;
@@ -62,7 +64,7 @@ async fn main() -> Result<()> {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
-            export_details_combined_csv(&fmp_client).await?;
+            export_details_combined(&fmp_client).await?;
         }
         Commands::ExportRates => {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
@@ -114,6 +116,7 @@ async fn export_details_eu_csv() -> Result<()> {
         "P/E Ratio",
         "D/E Ratio",
         "ROE",
+        "Date",
     ])?;
 
     let rate_map = get_rate_map();
@@ -170,12 +173,16 @@ async fn export_details_eu_csv() -> Result<()> {
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                    &details
+                        .pe_ratio
+                        .map(|r| r.to_string())
+                        .unwrap_or_default(),
                     &details
                         .debt_equity_ratio
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -184,7 +191,8 @@ async fn export_details_eu_csv() -> Result<()> {
                 // Write empty row for failed ticker
                 let error_msg = format!("Error: {}", e);
                 writer.write_record(&[
-                    &ticker, "", "", "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "",
+                    &ticker, "", "", "", "", "", "", &error_msg, "", "", "",
+                    "", "", "", "", "", "", "",
                 ])?;
             }
         }
@@ -199,7 +207,8 @@ async fn export_details_eu_csv() -> Result<()> {
 async fn export_details_us_csv() -> Result<()> {
     let config = config::load_config()?;
     let tickers = config.us_tickers;
-    let api_key = env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
+    let api_key =
+        env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
     let client = api::PolygonClient::new(api_key);
     let date = NaiveDate::from_ymd_opt(2023, 11, 1).unwrap();
 
@@ -230,6 +239,7 @@ async fn export_details_us_csv() -> Result<()> {
         "P/E Ratio",
         "D/E Ratio",
         "ROE",
+        "Date",
     ])?;
 
     for (i, ticker) in tickers.iter().enumerate() {
@@ -267,12 +277,16 @@ async fn export_details_us_csv() -> Result<()> {
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                    &details
+                        .pe_ratio
+                        .map(|r| r.to_string())
+                        .unwrap_or_default(),
                     &details
                         .debt_equity_ratio
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -281,7 +295,8 @@ async fn export_details_us_csv() -> Result<()> {
                 // Write empty row for failed ticker
                 let error_msg = format!("Error: {}", e);
                 writer.write_record(&[
-                    &ticker, "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "", "",
+                    &ticker, "", "", "", "", &error_msg, "", "", "", "", "",
+                    "", "", "", "", "", "",
                 ])?;
             }
         }
@@ -296,7 +311,8 @@ async fn export_details_us_csv() -> Result<()> {
 async fn list_details_us() -> Result<()> {
     let config = config::load_config()?;
     let tickers = config.us_tickers;
-    let api_key = env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
+    let api_key =
+        env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
     let client = api::PolygonClient::new(api_key);
     let date = NaiveDate::from_ymd_opt(2023, 11, 1).unwrap();
 
@@ -366,49 +382,84 @@ async fn list_details_eu() -> Result<()> {
     Ok(())
 }
 
-async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> {
+async fn export_details_combined(fmp_client: &api::FMPClient) -> Result<()> {
     let config = config::load_config()?;
     let tickers = [config.non_us_tickers, config.us_tickers].concat();
 
-    // First fetch exchange rates
-    println!("Fetching current exchange rates...");
+    // Fetch exchange rates
     let exchange_rates = match fmp_client.get_exchange_rates().await {
         Ok(rates) => {
-            println!("✅ Exchange rates fetched");
+            // Write exchange rates to CSV
+            let rates_path = format!(
+                "output/exchange_rates_{}.csv",
+                chrono::Local::now().format("%Y%m%d_%H%M%S")
+            );
+            let mut rates_writer = Writer::from_path(&rates_path)?;
+            rates_writer.write_record(&[
+                "Currency Pair",
+                "Rate",
+                "Change %",
+                "Base Currency",
+                "Quote Currency",
+                "Date",
+            ])?;
+
+            for rate in &rates {
+                let currencies: Vec<&str> = rate.name.as_deref().unwrap_or("").split('/').collect();
+                let (base, quote) = if currencies.len() == 2 {
+                    (currencies[0], currencies[1])
+                } else {
+                    ("", "")
+                };
+
+                rates_writer.write_record(&[
+                    rate.name.as_deref().unwrap_or(""),
+                    &rate.price.map_or_else(|| "".to_string(), |v| v.to_string()),
+                    &rate.changes_percentage.map_or_else(|| "".to_string(), |v| v.to_string()),
+                    base,
+                    quote,
+                    &rate.extra.get("timestamp").map_or("", |v| v.as_str()),
+                ])?;
+            }
+            println!("✅ Exchange rates written to {}", rates_path);
             rates
         }
         Err(e) => {
-            return Err(anyhow::anyhow!("Failed to fetch exchange rates: {}", e));
+            return Err(anyhow::anyhow!(
+                "Failed to fetch exchange rates: {}",
+                e
+            ));
         }
     };
 
-    // Create a map of currency pairs to rates
-    let mut rate_map: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    // Create rate map for currency conversion
+    let mut rate_map: std::collections::HashMap<String, f64> =
+        std::collections::HashMap::new();
     for rate in exchange_rates {
         if let (Some(name), Some(price)) = (rate.name, rate.price) {
             rate_map.insert(name, price);
         }
     }
 
-    // Convert exchange prefixes to FMP format
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("output/combined_marketcaps_{}.csv", timestamp);
-    let file = std::fs::File::create(&filename)?;
-    let mut writer = csv::Writer::from_writer(file);
+    // Create output directory if it doesn't exist
+    fs::create_dir_all("output")?;
 
-    // Write headers
+    let output_path = format!(
+        "output/combined_marketcaps_{}.csv",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    );
+    let mut writer = Writer::from_path(&output_path)?;
+
     writer.write_record(&[
-        "Ticker",
+        "Symbol",
         "Name",
+        "Currency",
         "Market Cap (Original)",
-        "Original Currency",
         "Market Cap (EUR)",
-        "Market Cap (USD)",
         "Exchange",
-        "Price",
         "Active",
         "Description",
-        "Homepage URL",
+        "Homepage",
         "Employees",
         "Revenue",
         "Revenue (USD)",
@@ -416,76 +467,75 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         "Quick Ratio",
         "EPS",
         "P/E Ratio",
-        "D/E Ratio",
+        "Debt/Equity Ratio",
         "ROE",
-        "Timestamp",
+        "Date",
     ])?;
 
-    // Create a rate_map Arc for sharing between tasks
-    let rate_map = Arc::new(rate_map);
     let total_tickers = tickers.len();
+    println!("Fetching details for {} companies...", total_tickers);
 
-    // Process tickers in parallel with progress tracking
+    let chunk_size = 5;
     let mut results = Vec::new();
+
     let progress = indicatif::ProgressBar::new(total_tickers as u64);
     progress.set_style(
         indicatif::ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            .template(
+                "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
+            )
             .unwrap()
             .progress_chars("=>-"),
     );
 
-    // Create chunks of tickers to process in parallel
-    // Process 50 tickers at a time to stay well within rate limits
-    for chunk in tickers.chunks(50) {
+    for chunk in tickers.chunks(chunk_size) {
         let chunk_futures = chunk.iter().map(|ticker| {
+            let ticker = ticker.clone();
+            let fmp_client = fmp_client.clone();
             let rate_map = rate_map.clone();
-            let ticker = ticker.to_string();
             let progress = progress.clone();
 
             async move {
-                let result = match fmp_client.get_details(&ticker, &rate_map).await {
+                let result = match fmp_client
+                    .get_details(&ticker, &rate_map)
+                    .await
+                {
                     Ok(details) => {
-                        let original_market_cap = details.market_cap.unwrap_or(0.0);
-                        let currency = details.currency_symbol.clone().unwrap_or_default();
+                        let original_market_cap =
+                            details.market_cap.unwrap_or(0.0);
+                        let currency =
+                            details.currency_symbol.clone().unwrap_or_default();
                         let eur_market_cap = crate::utils::convert_currency(
                             original_market_cap,
                             &currency,
                             "EUR",
                             &rate_map,
                         );
-                        let usd_market_cap = crate::utils::convert_currency(
-                            original_market_cap,
-                            &currency,
-                            "USD",
-                            &rate_map,
-                        );
 
                         Some((
                             eur_market_cap,
                             vec![
-                                details.ticker,
+                                ticker,
                                 details.name.unwrap_or_default(),
-                                original_market_cap.round().to_string(),
                                 currency,
-                                eur_market_cap.round().to_string(),
-                                usd_market_cap.round().to_string(),
+                                original_market_cap.to_string(),
+                                eur_market_cap.to_string(),
                                 details
                                     .extra
                                     .get("exchange")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string(),
-                                details
-                                    .extra
-                                    .get("price")
                                     .map(|v| v.to_string())
                                     .unwrap_or_default(),
-                                details.active.map(|a| a.to_string()).unwrap_or_default(),
+                                details
+                                    .active
+                                    .map(|a| a.to_string())
+                                    .unwrap_or_default(),
                                 details.description.unwrap_or_default(),
                                 details.homepage_url.unwrap_or_default(),
                                 details.employees.unwrap_or_default(),
-                                details.revenue.map(|r| r.to_string()).unwrap_or_default(),
+                                details
+                                    .revenue
+                                    .map(|r| r.to_string())
+                                    .unwrap_or_default(),
                                 details
                                     .revenue_usd
                                     .map(|r| r.to_string())
@@ -498,19 +548,28 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                                     .quick_ratio
                                     .map(|r| r.to_string())
                                     .unwrap_or_default(),
-                                details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                                details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                                details
+                                    .eps
+                                    .map(|r| r.to_string())
+                                    .unwrap_or_default(),
+                                details
+                                    .pe_ratio
+                                    .map(|r| r.to_string())
+                                    .unwrap_or_default(),
                                 details
                                     .debt_equity_ratio
                                     .map(|r| r.to_string())
                                     .unwrap_or_default(),
-                                details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                                details.timestamp.unwrap_or_default(),
+                                details
+                                    .roe
+                                    .map(|r| r.to_string())
+                                    .unwrap_or_default(),
+                                &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
                             ],
                         ))
                     }
                     Err(e) => {
-                        eprintln!("Error fetching data for {}: {}", ticker, e);
+                        eprintln!("Error fetching details for {}: {}", ticker, e);
                         None
                     }
                 };
@@ -518,9 +577,8 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                 result
             }
         });
-
-        // Wait for the current chunk to complete
-        let chunk_results: Vec<_> = futures::future::join_all(chunk_futures).await;
+        let chunk_results: Vec<_> =
+            futures::future::join_all(chunk_futures).await;
         results.extend(chunk_results.into_iter().flatten());
     }
 
@@ -538,18 +596,18 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         writer.write_record(record)?;
     }
     writer.flush()?;
-    println!("✅ Combined market caps written to: {}", filename);
+    println!("✅ Combined market caps written to: {}", output_path);
 
     // Filter active tickers and get top 100
     let top_100_results: Vec<(f64, Vec<String>)> = results
         .iter()
-        .filter(|(_, record)| record[8] == "true") // Active column
+        .filter(|(_, record)| record[7] == "true") // Active column
         .take(100)
         .map(|(cap, record)| (*cap, record.clone()))
         .collect();
 
     // Generate top 100 CSV
-    let top_100_filename = format!("output/top_100_active_{}.csv", timestamp);
+    let top_100_filename = format!("output/top_100_active_{}.csv", chrono::Local::now().format("%Y%m%d_%H%M%S"));
     let top_100_file = std::fs::File::create(&top_100_filename)?;
     let mut top_100_writer = csv::Writer::from_writer(top_100_file);
 
@@ -575,7 +633,7 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
         "P/E Ratio",
         "D/E Ratio",
         "ROE",
-        "Timestamp",
+        "Date",
     ])?;
 
     // Write top 100 records
@@ -610,14 +668,15 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
         "Day High",
         "Base Currency",
         "Quote Currency",
-        "Timestamp",
+        "Date",
     ])?;
 
     match fmp_client.get_exchange_rates().await {
         Ok(rates) => {
             for rate in rates {
                 // Split the symbol into base and quote currencies (e.g., "EUR/USD" -> ["EUR", "USD"])
-                let currencies: Vec<&str> = rate.name.as_deref().unwrap_or("").split('/').collect();
+                let currencies: Vec<&str> =
+                    rate.name.as_deref().unwrap_or("").split('/').collect();
                 let (base, quote) = if currencies.len() == 2 {
                     (currencies[0], currencies[1])
                 } else {
@@ -626,7 +685,9 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
 
                 writer.write_record(&[
                     rate.name.as_deref().unwrap_or(""),
-                    &rate.price.map_or_else(|| "".to_string(), |v| v.to_string()),
+                    &rate
+                        .price
+                        .map_or_else(|| "".to_string(), |v| v.to_string()),
                     &rate
                         .changes_percentage
                         .map_or_else(|| "".to_string(), |v| v.to_string()),
@@ -641,7 +702,7 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
                         .map_or_else(|| "".to_string(), |v| v.to_string()),
                     base,
                     quote,
-                    &rate.timestamp.to_string(),
+                    &rate.extra.get("timestamp").map_or("", |v| v.as_str()),
                 ])?;
             }
             println!("✅ Exchange rates written to CSV");
@@ -667,7 +728,10 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
 }
 
 #[allow(dead_code)]
-async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str) -> Result<()> {
+async fn export_marketcap_with_progress(
+    tickers: Vec<String>,
+    output_path: &str,
+) -> Result<()> {
     let mut writer = Writer::from_path(output_path)?;
 
     writer.write_record(&[
@@ -688,6 +752,7 @@ async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str)
         "P/E Ratio",
         "D/E Ratio",
         "ROE",
+        "Date",
     ])?;
 
     let rate_map = get_rate_map();
@@ -726,12 +791,16 @@ async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str)
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.eps.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.pe_ratio.map(|r| r.to_string()).unwrap_or_default(),
+                    &details
+                        .pe_ratio
+                        .map(|r| r.to_string())
+                        .unwrap_or_default(),
                     &details
                         .debt_equity_ratio
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
+                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -740,7 +809,8 @@ async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str)
                 // Write empty row for failed ticker
                 let error_msg = format!("Error: {}", e);
                 writer.write_record(&[
-                    &ticker, "", "", "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "",
+                    &ticker, "", "", "", "", "", "", &error_msg, "", "", "",
+                    "", "", "", "", "", "", "",
                 ])?;
             }
         }
@@ -752,7 +822,10 @@ async fn export_marketcap_with_progress(tickers: Vec<String>, output_path: &str)
 }
 
 #[allow(dead_code)]
-async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Result<()> {
+async fn export_marketcap_to_json(
+    tickers: Vec<String>,
+    output_path: &str,
+) -> Result<()> {
     let rate_map = get_rate_map();
     let fmp_client = api::FMPClient::new(
         env::var("FINANCIALMODELINGPREP_API_KEY")
@@ -774,12 +847,17 @@ async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Re
                 employees: details.employees.unwrap_or_default(),
                 revenue: details.revenue.unwrap_or_default(),
                 revenue_usd: details.revenue_usd.unwrap_or_default(),
-                working_capital_ratio: details.working_capital_ratio.unwrap_or_default(),
+                working_capital_ratio: details
+                    .working_capital_ratio
+                    .unwrap_or_default(),
                 quick_ratio: details.quick_ratio.unwrap_or_default(),
                 eps: details.eps.unwrap_or_default(),
                 pe_ratio: details.pe_ratio.unwrap_or_default(),
-                debt_equity_ratio: details.debt_equity_ratio.unwrap_or_default(),
+                debt_equity_ratio: details
+                    .debt_equity_ratio
+                    .unwrap_or_default(),
                 roe: details.roe.unwrap_or_default(),
+                timestamp: details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
             });
         } else {
             eprintln!("Error fetching details for {}", ticker);
@@ -792,7 +870,10 @@ async fn export_marketcap_to_json(tickers: Vec<String>, output_path: &str) -> Re
     Ok(())
 }
 
-fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) -> Result<()> {
+fn generate_market_heatmap(
+    results: &[(f64, Vec<String>)],
+    output_path: &str,
+) -> Result<()> {
     let stocks: Vec<viz::StockData> = results
         .iter()
         .map(|(market_cap, record)| {
@@ -841,7 +922,10 @@ fn get_rate_map() -> HashMap<String, f64> {
                 if let Some(("USD", to2)) = pair2.split_once('/') {
                     if from1 != to2 {
                         // Calculate cross rate: from1/to2 = (from1/USD) * (USD/to2)
-                        pairs_to_add.push((format!("{}/{}", from1, to2), rate1 * rate2));
+                        pairs_to_add.push((
+                            format!("{}/{}", from1, to2),
+                            rate1 * rate2,
+                        ));
                     }
                 }
             }
@@ -864,33 +948,44 @@ fn get_rate_map() -> HashMap<String, f64> {
 
 /// Find the latest file in the output directory that matches a pattern
 fn find_latest_file(pattern: &str) -> Result<PathBuf> {
-    let paths: Vec<PathBuf> = glob(pattern)?.filter_map(|entry| entry.ok()).collect();
+    let paths: Vec<PathBuf> =
+        glob(pattern)?.filter_map(|entry| entry.ok()).collect();
 
     let latest_file = paths
         .iter()
         .max_by_key(|path| path.metadata().unwrap().modified().unwrap())
         .ok_or_else(|| {
-            anyhow::anyhow!("No files matching '{}' found in output directory", pattern)
+            anyhow::anyhow!(
+                "No files matching '{}' found in output directory",
+                pattern
+            )
         })?;
 
     Ok(latest_file.to_path_buf())
 }
 
 /// Read CSV file and return records with market cap in EUR
-fn read_csv_with_market_cap(file_path: &Path) -> Result<Vec<(f64, Vec<String>)>> {
+fn read_csv_with_market_cap(
+    file_path: &Path,
+) -> Result<Vec<(f64, Vec<String>)>> {
     let mut rdr = csv::Reader::from_path(file_path)?;
     let headers = rdr.headers()?.clone();
     let market_cap_idx = headers
         .iter()
         .position(|h| h == "Market Cap (USD)")
-        .ok_or_else(|| anyhow::anyhow!("Market Cap (USD) column not found"))?;
+        .ok_or_else(|| {
+        anyhow::anyhow!("Market Cap (USD) column not found")
+    })?;
 
     let mut results = Vec::new();
 
     for record in rdr.records() {
         let record = record?;
         if let Ok(market_cap) = record[market_cap_idx].parse::<f64>() {
-            results.push((market_cap, record.iter().map(|s| s.to_string()).collect()));
+            results.push((
+                market_cap,
+                record.iter().map(|s| s.to_string()).collect(),
+            ));
         }
     }
 
@@ -1008,13 +1103,15 @@ mod tests {
             "test",
         )
         .unwrap();
-        let latest_file = output_dir.join("combined_marketcaps_20240103_120000.csv");
+        let latest_file =
+            output_dir.join("combined_marketcaps_20240103_120000.csv");
         fs::write(&latest_file, "test").unwrap();
 
         // Set current directory to temp dir for test
         std::env::set_current_dir(&dir_path).unwrap();
 
-        let latest = find_latest_file("output/combined_marketcaps_*.csv").unwrap();
+        let latest =
+            find_latest_file("output/combined_marketcaps_*.csv").unwrap();
         assert_eq!(
             latest.canonicalize().unwrap(),
             latest_file.canonicalize().unwrap()
