@@ -17,9 +17,6 @@ use dotenvy::dotenv;
 use glob::glob;
 use std::{
     collections::HashMap,
-    env,
-    fs,
-    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -182,7 +179,11 @@ async fn export_details_eu_csv() -> Result<()> {
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
+                    &details
+                        .extra
+                        .get("timestamp")
+                        .map_or("", |v| v.as_str())
+                        .to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -286,7 +287,11 @@ async fn export_details_us_csv() -> Result<()> {
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
+                    &details
+                        .extra
+                        .get("timestamp")
+                        .map_or("", |v| v.as_str())
+                        .to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -405,7 +410,8 @@ async fn export_details_combined(fmp_client: &api::FMPClient) -> Result<()> {
             ])?;
 
             for rate in &rates {
-                let currencies: Vec<&str> = rate.name.as_deref().unwrap_or("").split('/').collect();
+                let currencies: Vec<&str> =
+                    rate.name.as_deref().unwrap_or("").split('/').collect();
                 let (base, quote) = if currencies.len() == 2 {
                     (currencies[0], currencies[1])
                 } else {
@@ -414,8 +420,12 @@ async fn export_details_combined(fmp_client: &api::FMPClient) -> Result<()> {
 
                 rates_writer.write_record(&[
                     rate.name.as_deref().unwrap_or(""),
-                    &rate.price.map_or_else(|| "".to_string(), |v| v.to_string()),
-                    &rate.changes_percentage.map_or_else(|| "".to_string(), |v| v.to_string()),
+                    &rate
+                        .price
+                        .map_or_else(|| "".to_string(), |v| v.to_string()),
+                    &rate
+                        .changes_percentage
+                        .map_or_else(|| "".to_string(), |v| v.to_string()),
                     base,
                     quote,
                     &rate.extra.get("timestamp").map_or("", |v| v.as_str()),
@@ -564,12 +574,19 @@ async fn export_details_combined(fmp_client: &api::FMPClient) -> Result<()> {
                                     .roe
                                     .map(|r| r.to_string())
                                     .unwrap_or_default(),
-                                &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
+                                &details
+                                    .extra
+                                    .get("timestamp")
+                                    .map_or("", |v| v.as_str())
+                                    .to_string(),
                             ],
                         ))
                     }
                     Err(e) => {
-                        eprintln!("Error fetching details for {}: {}", ticker, e);
+                        eprintln!(
+                            "Error fetching details for {}: {}",
+                            ticker, e
+                        );
                         None
                     }
                 };
@@ -607,7 +624,10 @@ async fn export_details_combined(fmp_client: &api::FMPClient) -> Result<()> {
         .collect();
 
     // Generate top 100 CSV
-    let top_100_filename = format!("output/top_100_active_{}.csv", chrono::Local::now().format("%Y%m%d_%H%M%S"));
+    let top_100_filename = format!(
+        "output/top_100_active_{}.csv",
+        chrono::Local::now().format("%Y%m%d_%H%M%S")
+    );
     let top_100_file = std::fs::File::create(&top_100_filename)?;
     let mut top_100_writer = csv::Writer::from_writer(top_100_file);
 
@@ -800,7 +820,11 @@ async fn export_marketcap_with_progress(
                         .map(|r| r.to_string())
                         .unwrap_or_default(),
                     &details.roe.map(|r| r.to_string()).unwrap_or_default(),
-                    &details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
+                    &details
+                        .extra
+                        .get("timestamp")
+                        .map_or("", |v| v.as_str())
+                        .to_string(),
                 ])?;
                 println!("✅ Data written to CSV");
             }
@@ -857,7 +881,11 @@ async fn export_marketcap_to_json(
                     .debt_equity_ratio
                     .unwrap_or_default(),
                 roe: details.roe.unwrap_or_default(),
-                timestamp: details.extra.get("timestamp").map_or("", |v| v.as_str()).to_string(),
+                timestamp: details
+                    .extra
+                    .get("timestamp")
+                    .map_or("", |v| v.as_str())
+                    .to_string(),
             });
         } else {
             eprintln!("Error fetching details for {}", ticker);
