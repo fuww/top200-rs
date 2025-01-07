@@ -25,28 +25,13 @@ jobs:
       with:
         name: fashionunited
         authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
-        skipPush: true
 
     - name: Run unit tests with coverage
       run: |
-        # Retry logic for nix develop
-        max_attempts=3
-        attempt=1
-        while [ $attempt -le $max_attempts ]; do
-          if nix \
+        nix \
             --extra-experimental-features "nix-command flakes" \
             develop \
-            --command bash -c "cargo install cargo-tarpaulin && cargo tarpaulin --out lcov --output-dir coverage"; then
-            break
-          fi
-          echo "Attempt $attempt failed. Waiting before retry..."
-          sleep 30
-          attempt=$((attempt + 1))
-        done
-        if [ $attempt -gt $max_attempts ]; then
-          echo "All attempts failed"
-          exit 1
-        fi
+          --command bash -c "cargo install cargo-tarpaulin && cargo tarpaulin --out lcov --output-dir coverage"
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
