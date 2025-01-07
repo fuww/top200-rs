@@ -626,9 +626,7 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
 
                 writer.write_record(&[
                     rate.name.as_deref().unwrap_or(""),
-                    &rate
-                        .price
-                        .map_or_else(|| "".to_string(), |v| v.to_string()),
+                    &rate.price.map_or_else(|| "".to_string(), |v| v.to_string()),
                     &rate
                         .changes_percentage
                         .map_or_else(|| "".to_string(), |v| v.to_string()),
