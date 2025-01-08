@@ -27,23 +27,23 @@ pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Resul
 
 /// Get a currency from the database by its code
 pub async fn get_currency(pool: &SqlitePool, code: &str) -> Result<Option<(String, String)>> {
-    let record = sqlx::query!(
+    let record = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT code, name
         FROM currencies
         WHERE code = ?
         "#,
-        code
     )
+    .bind(code)
     .fetch_optional(pool)
     .await?;
 
-    Ok(record.map(|r| (r.code.unwrap_or_default(), r.name)))
+    Ok(record)
 }
 
 /// List all currencies in the database
 pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
-    let records = sqlx::query!(
+    let records = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT code, name
         FROM currencies
@@ -53,7 +53,7 @@ pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>>
     .fetch_all(pool)
     .await?;
 
-    Ok(records.into_iter().map(|r| (r.code.unwrap_or_default(), r.name)).collect())
+    Ok(records)
 }
 
 /// Get a map of exchange rates between currencies
@@ -159,11 +159,120 @@ pub fn convert_currency(
     amount
 }
 
+/// Insert a forex rate into the database
+pub async fn insert_forex_rate(
+    pool: &SqlitePool,
+    symbol: &str,
+    ask: f64,
+    bid: f64,
+    timestamp: i64,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO forex_rates (symbol, ask, bid, timestamp)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(symbol, timestamp) DO UPDATE SET
+            ask = excluded.ask,
+            bid = excluded.bid,
+            updated_at = CURRENT_TIMESTAMP
+        "#,
+    )
+    .bind(symbol)
+    .bind(ask)
+    .bind(bid)
+    .bind(timestamp)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+/// Get the latest forex rate for a symbol
+pub async fn get_latest_forex_rate(
+    pool: &SqlitePool,
+    symbol: &str,
+) -> Result<Option<(f64, f64, i64)>> {
+    let record = sqlx::query_as::<_, (f64, f64, i64)>(
+        r#"
+        SELECT ask, bid, timestamp
+        FROM forex_rates
+        WHERE symbol = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(symbol)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record)
+}
+
+/// Get all forex rates for a symbol within a time range
+pub async fn get_forex_rates(
+    pool: &SqlitePool,
+    symbol: &str,
+    from_timestamp: i64,
+    to_timestamp: i64,
+) -> Result<Vec<(f64, f64, i64)>> {
+    let records = sqlx::query_as::<_, (f64, f64, i64)>(
+        r#"
+        SELECT ask, bid, timestamp
+        FROM forex_rates
+        WHERE symbol = ?
+        AND timestamp BETWEEN ? AND ?
+        ORDER BY timestamp DESC
+        "#,
+    )
+    .bind(symbol)
+    .bind(from_timestamp)
+    .bind(to_timestamp)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(records)
+}
+
+/// List all unique symbols in the forex_rates table
+pub async fn list_forex_symbols(pool: &SqlitePool) -> Result<Vec<String>> {
+    let records = sqlx::query_as::<_, (String,)>(
+        r#"
+        SELECT DISTINCT symbol
+        FROM forex_rates
+        ORDER BY symbol
+        "#
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(records.into_iter().map(|(symbol,)| symbol).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
     use crate::db;
+
+    #[tokio::test]
+    async fn test_db_schema() -> Result<()> {
+        // Set up database connection
+        let db_url = "sqlite::memory:";
+        let pool = crate::db::create_db_pool(db_url).await?;
+
+        // Test that we can insert and retrieve forex rates
+        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301).await?;
+        
+        // Check that we can retrieve the rate
+        let rate = get_latest_forex_rate(&pool, "EURUSD").await?;
+        assert!(rate.is_some());
+        let (ask, bid, timestamp) = rate.unwrap();
+        assert_relative_eq!(ask, 1.07833, epsilon = 0.00001);
+        assert_relative_eq!(bid, 1.07832, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956301);
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_currencies_in_database() -> Result<()> {
@@ -235,5 +344,37 @@ mod tests {
         // Test same currency
         let result = convert_currency(100.0, "USD", "USD", &rate_map);
         assert_relative_eq!(result, 100.0, epsilon = 0.01);
+    }
+
+    #[tokio::test]
+    async fn test_forex_rates() -> Result<()> {
+        // Set up database connection
+        let db_url = "sqlite::memory:";
+        let pool = crate::db::create_db_pool(db_url).await?;
+
+        // Insert some test data
+        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301).await?;
+        insert_forex_rate(&pool, "EURUSD", 1.07834, 1.07833, 1701956302).await?;
+        insert_forex_rate(&pool, "GBPUSD", 1.25001, 1.25000, 1701956301).await?;
+
+        // Test getting latest rate
+        let latest = get_latest_forex_rate(&pool, "EURUSD").await?;
+        assert!(latest.is_some());
+        let (ask, bid, timestamp) = latest.unwrap();
+        assert_relative_eq!(ask, 1.07834, epsilon = 0.00001);
+        assert_relative_eq!(bid, 1.07833, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956302);
+
+        // Test getting rates in range
+        let rates = get_forex_rates(&pool, "EURUSD", 1701956300, 1701956303).await?;
+        assert_eq!(rates.len(), 2);
+
+        // Test listing symbols
+        let symbols = list_forex_symbols(&pool).await?;
+        assert_eq!(symbols.len(), 2);
+        assert!(symbols.contains(&"EURUSD".to_string()));
+        assert!(symbols.contains(&"GBPUSD".to_string()));
+
+        Ok(())
     }
 }

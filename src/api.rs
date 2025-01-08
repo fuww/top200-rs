@@ -256,21 +256,21 @@ impl FMPClient {
         Ok(statements.into_iter().next())
     }
 
-    pub async fn get_exchange_rates(
-        &self,
-    ) -> Result<Vec<ExchangeRate>, Box<dyn std::error::Error>> {
+    pub async fn get_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
         let url = format!(
             "https://financialmodelingprep.com/api/v3/quotes/forex?apikey={}",
             self.api_key
         );
 
-        let response = self.client.get(&url).send().await?;
+        let response = self.client.get(&url).send().await
+            .context("Failed to send request to FMP forex API")?;
 
         if !response.status().is_success() {
-            return Err(format!("API request failed with status: {}", response.status()).into());
+            anyhow::bail!("API request failed with status: {}", response.status());
         }
 
-        let rates: Vec<ExchangeRate> = response.json().await?;
+        let rates: Vec<ExchangeRate> = response.json().await
+            .context("Failed to parse forex rates response")?;
         Ok(rates)
     }
 }

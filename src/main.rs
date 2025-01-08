@@ -92,6 +92,23 @@ async fn main() -> Result<()> {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
+            let rates = fmp_client.get_exchange_rates().await?;
+
+            // Store rates in the database
+            for rate in &rates {
+                if let (Some(name), Some(price)) = (&rate.name, rate.price) {
+                    // We'll use the price as both ask and bid since the API doesn't provide spread
+                    currencies::insert_forex_rate(
+                        &pool,
+                        name,
+                        price,
+                        price,
+                        rate.timestamp,
+                    ).await?;
+                }
+            }
+
+            // Export to CSV as before
             export_exchange_rates_csv(&fmp_client).await?;
         }
         Some(Commands::ListUs) => list_details_us().await?,
