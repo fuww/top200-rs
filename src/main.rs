@@ -4,6 +4,7 @@
 
 mod api;
 mod config;
+mod db;
 mod models;
 mod utils;
 mod viz;
@@ -49,6 +50,15 @@ enum Commands {
     GenerateHeatmap,
     /// Output top 100 active tickers
     ListTop100,
+    /// Add a new currency to the database
+    AddCurrency {
+        /// Currency code (e.g., USD, EUR)
+        code: String,
+        /// Currency name (e.g., US Dollar)
+        name: String,
+    },
+    /// List all currencies in the database
+    ListCurrencies,
 }
 
 #[tokio::main]
@@ -57,25 +67,45 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    match cli.command.unwrap_or(Commands::ExportCombined) {
-        Commands::ExportCombined => {
+    // Set up database connection
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:data.db".to_string());
+    let pool = db::create_db_pool(&db_url).await?;
+
+    match cli.command {
+        Some(Commands::AddCurrency { code, name }) => {
+            db::insert_currency(&pool, &code, &name).await?;
+            println!("Added currency: {} ({})", name, code);
+        }
+        Some(Commands::ListCurrencies) => {
+            let currencies = db::list_currencies(&pool).await?;
+            for (code, name) in currencies {
+                println!("{}: {}", code, name);
+            }
+        }
+        Some(Commands::ExportCombined) => {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             export_details_combined_csv(&fmp_client).await?;
         }
-        Commands::ExportRates => {
+        Some(Commands::ExportRates) => {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             export_exchange_rates_csv(&fmp_client).await?;
         }
-        Commands::ListUs => list_details_us().await?,
-        Commands::ListEu => list_details_eu().await?,
-        Commands::ExportUs => export_details_us_csv().await?,
-        Commands::ExportEu => export_details_eu_csv().await?,
-        Commands::GenerateHeatmap => generate_heatmap_from_latest()?,
-        Commands::ListTop100 => output_top_100_active()?,
+        Some(Commands::ListUs) => list_details_us().await?,
+        Some(Commands::ListEu) => list_details_eu().await?,
+        Some(Commands::ExportUs) => export_details_us_csv().await?,
+        Some(Commands::ExportEu) => export_details_eu_csv().await?,
+        Some(Commands::GenerateHeatmap) => generate_heatmap_from_latest()?,
+        Some(Commands::ListTop100) => output_top_100_active()?,
+        None => {
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
+                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let fmp_client = api::FMPClient::new(api_key);
+            export_details_combined_csv(&fmp_client).await?;
+        }
     }
 
     Ok(())

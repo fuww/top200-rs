@@ -12,6 +12,16 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 - add a command so I can test with just a few tickers
 
+## Database
+
+```sh
+sqlx database create
+sqlx migrate run
+
+# first time only
+sqlx migrate add init
+```
+
 ## License
 
 To set license and copyright information, run:
