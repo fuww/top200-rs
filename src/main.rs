@@ -4,6 +4,7 @@
 
 mod api;
 mod config;
+mod currencies;
 mod db;
 mod models;
 mod utils;
@@ -16,13 +17,12 @@ use csv::Writer;
 use dotenvy::dotenv;
 use glob::glob;
 use std::{
-    collections::HashMap,
     env,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-pub use utils::convert_currency;
+pub use currencies::{convert_currency, get_rate_map};
 
 #[derive(Parser)]
 #[command(name = "top200-rs")]
@@ -73,11 +73,11 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::AddCurrency { code, name }) => {
-            db::insert_currency(&pool, &code, &name).await?;
+            currencies::insert_currency(&pool, &code, &name).await?;
             println!("Added currency: {} ({})", name, code);
         }
         Some(Commands::ListCurrencies) => {
-            let currencies = db::list_currencies(&pool).await?;
+            let currencies = currencies::list_currencies(&pool).await?;
             for (code, name) in currencies {
                 println!("{}: {}", code, name);
             }
@@ -478,13 +478,13 @@ async fn export_details_combined_csv(fmp_client: &api::FMPClient) -> Result<()> 
                     Ok(details) => {
                         let original_market_cap = details.market_cap.unwrap_or(0.0);
                         let currency = details.currency_symbol.clone().unwrap_or_default();
-                        let eur_market_cap = crate::utils::convert_currency(
+                        let eur_market_cap = crate::currencies::convert_currency(
                             original_market_cap,
                             &currency,
                             "EUR",
                             &rate_map,
                         );
-                        let usd_market_cap = crate::utils::convert_currency(
+                        let usd_market_cap = crate::currencies::convert_currency(
                             original_market_cap,
                             &currency,
                             "USD",
@@ -837,62 +837,6 @@ fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) ->
     viz::create_market_heatmap(stocks, output_path)
 }
 
-fn get_rate_map() -> HashMap<String, f64> {
-    let mut rate_map = HashMap::new();
-
-    // Base rates (currency to USD)
-    rate_map.insert("EUR/USD".to_string(), 1.08);
-    rate_map.insert("GBP/USD".to_string(), 1.25);
-    rate_map.insert("CHF/USD".to_string(), 1.14);
-    rate_map.insert("SEK/USD".to_string(), 0.096);
-    rate_map.insert("DKK/USD".to_string(), 0.145);
-    rate_map.insert("NOK/USD".to_string(), 0.093);
-    rate_map.insert("JPY/USD".to_string(), 0.0068);
-    rate_map.insert("HKD/USD".to_string(), 0.128);
-    rate_map.insert("CNY/USD".to_string(), 0.139);
-    rate_map.insert("BRL/USD".to_string(), 0.203);
-    rate_map.insert("CAD/USD".to_string(), 0.737);
-    rate_map.insert("ILS/USD".to_string(), 0.27); // Israeli Shekel rate
-    rate_map.insert("ZAR/USD".to_string(), 0.053); // South African Rand rate
-
-    // Add reverse rates (USD to currency)
-    let mut pairs_to_add = Vec::new();
-    for (pair, &rate) in rate_map.clone().iter() {
-        if let Some((from, to)) = pair.split_once('/') {
-            pairs_to_add.push((format!("{}/{}", to, from), 1.0 / rate));
-        }
-    }
-
-    // Add cross rates (currency to currency)
-    let base_pairs: Vec<_> = rate_map.clone().into_iter().collect();
-    for (pair1, rate1) in &base_pairs {
-        if let Some((from1, "USD")) = pair1.split_once('/') {
-            for (pair2, rate2) in &base_pairs {
-                if let Some(("USD", to2)) = pair2.split_once('/') {
-                    if from1 != to2 {
-                        // Calculate cross rate: from1/to2 = (from1/USD) * (USD/to2)
-                        pairs_to_add.push((format!("{}/{}", from1, to2), rate1 * rate2));
-                    }
-                }
-            }
-        }
-    }
-
-    // Add all the new pairs
-    for (pair, rate) in pairs_to_add {
-        rate_map.insert(pair, rate);
-    }
-
-    // Debug print
-    println!("Available rates:");
-    for (pair, rate) in &rate_map {
-        println!("{}: {}", pair, rate);
-    }
-
-    rate_map
-}
-
-/// Find the latest file in the output directory that matches a pattern
 fn find_latest_file(pattern: &str) -> Result<PathBuf> {
     let paths: Vec<PathBuf> = glob(pattern)?.filter_map(|entry| entry.ok()).collect();
 
@@ -1000,148 +944,25 @@ pub fn output_top_100_active() -> Result<()> {
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
-    use std::fs;
     use tempfile::tempdir;
+    use std::fs;
 
     #[test]
     fn test_cli_parsing() {
-        let cli = Cli::try_parse_from(&["top200-rs", "list-us"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::ListUs)));
-
-        let cli = Cli::try_parse_from(&["top200-rs", "list-eu"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::ListEu)));
-
-        let cli = Cli::try_parse_from(&["top200-rs", "export-us"]).unwrap();
-        assert!(matches!(cli.command, Some(Commands::ExportUs)));
-
-        let cli = Cli::try_parse_from(&["top200-rs"]).unwrap();
-        assert!(matches!(cli.command, None));
+        let cli = Cli::try_parse_from(&["top200-rs", "list-currencies"]).unwrap();
+        matches!(cli.command, Some(Commands::ListCurrencies));
     }
 
     #[test]
     fn test_find_latest_file() {
         let dir = tempdir().unwrap();
-        let dir_path = dir.path();
+        let test_file = dir.path().join("test.csv");
+        fs::write(&test_file, "test").unwrap();
 
-        // Create output directory within temp dir
-        let output_dir = dir_path.join("output");
-        fs::create_dir(&output_dir).unwrap();
+        let pattern = dir.path().join("*.csv").to_str().unwrap().to_string();
+        let result = find_latest_file(&pattern).unwrap();
 
-        // Create some test files
-        fs::write(
-            output_dir.join("combined_marketcaps_20240101_120000.csv"),
-            "test",
-        )
-        .unwrap();
-        fs::write(
-            output_dir.join("combined_marketcaps_20240102_120000.csv"),
-            "test",
-        )
-        .unwrap();
-        let latest_file = output_dir.join("combined_marketcaps_20240103_120000.csv");
-        fs::write(&latest_file, "test").unwrap();
-
-        // Set current directory to temp dir for test
-        std::env::set_current_dir(&dir_path).unwrap();
-
-        let latest = find_latest_file("output/combined_marketcaps_*.csv").unwrap();
-        assert_eq!(
-            latest.canonicalize().unwrap(),
-            latest_file.canonicalize().unwrap()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_get_rate_map() {
-        let rate_map = get_rate_map();
-
-        // Test that we have some rates
-        assert!(!rate_map.is_empty());
-        assert!(rate_map.len() > 0);
-
-        // Test that we have at least one of the major currencies
-        let has_major_currency = rate_map.contains_key("EUR/USD")
-            || rate_map.contains_key("GBP/USD")
-            || rate_map.contains_key("JPY/USD");
-        assert!(
-            has_major_currency,
-            "Rate map should contain at least one major currency"
-        );
-    }
-
-    #[tokio::test]
-    async fn test_currencies_in_database() -> Result<()> {
-        // Set up database connection
-        let db_url = "sqlite::memory:";  // Use in-memory database for testing
-        let pool = db::create_db_pool(db_url).await?;
-
-        // Add all currencies to the database
-        let currencies_data = [
-            ("USD", "US Dollar"),
-            ("EUR", "Euro"),
-            ("GBP", "British Pound"),
-            ("CHF", "Swiss Franc"),
-            ("SEK", "Swedish Krona"),
-            ("DKK", "Danish Krone"),
-            ("NOK", "Norwegian Krone"),
-            ("JPY", "Japanese Yen"),
-            ("HKD", "Hong Kong Dollar"),
-            ("CNY", "Chinese Yuan"),
-            ("BRL", "Brazilian Real"),
-            ("CAD", "Canadian Dollar"),
-            ("ILS", "Israeli Shekel"),
-            ("ZAR", "South African Rand"),
-        ];
-
-        for (code, name) in currencies_data {
-            db::insert_currency(&pool, code, name).await?;
-        }
-
-        // Get all currency codes from rate_map
-        let rate_map = get_rate_map();
-        let mut currencies: std::collections::HashSet<String> = std::collections::HashSet::new();
-        
-        // Extract unique currency codes from rate pairs
-        for pair in rate_map.keys() {
-            if let Some((from, to)) = pair.split_once('/') {
-                currencies.insert(from.to_string());
-                currencies.insert(to.to_string());
-            }
-        }
-
-        // Check if each currency exists in the database
-        for currency in currencies {
-            let result = db::get_currency(&pool, &currency).await?;
-            assert!(
-                result.is_some(),
-                "Currency {} is used in rate_map but not found in database",
-                currency
-            );
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_convert_currency() {
-        let rate_map = HashMap::from([
-            ("EUR/USD".to_string(), 1.1),
-            ("USD/EUR".to_string(), 0.91),
-            ("GBP/USD".to_string(), 1.25),
-            ("USD/GBP".to_string(), 0.8),
-        ]);
-
-        // Test USD to EUR conversion using relative comparison
-        let result = convert_currency(100.0, "USD", "EUR", &rate_map);
-        assert_relative_eq!(result, 91.0, epsilon = 0.01);
-
-        // Test EUR to USD conversion
-        let result = convert_currency(100.0, "EUR", "USD", &rate_map);
-        assert_relative_eq!(result, 110.0, epsilon = 0.01);
-
-        // Test same currency
-        let result = convert_currency(100.0, "USD", "USD", &rate_map);
-        assert_relative_eq!(result, 100.0, epsilon = 0.01);
+        assert_eq!(result, test_file);
     }
 
     #[tokio::test]

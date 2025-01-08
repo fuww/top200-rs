@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use anyhow::Result;
 use sqlx::sqlite::SqlitePool;
 
@@ -19,51 +23,4 @@ pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
     .await?;
 
     Ok(pool)
-}
-
-pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Result<()> {
-    sqlx::query(
-        r#"
-        INSERT INTO currencies (code, name)
-        VALUES (?, ?)
-        ON CONFLICT(code) DO UPDATE SET
-            name = excluded.name,
-            updated_at = CURRENT_TIMESTAMP
-        "#,
-    )
-    .bind(code)
-    .bind(name)
-    .execute(pool)
-    .await?;
-
-    Ok(())
-}
-
-pub async fn get_currency(pool: &SqlitePool, code: &str) -> Result<Option<(String, String)>> {
-    let record = sqlx::query!(
-        r#"
-        SELECT code, name
-        FROM currencies
-        WHERE code = ?
-        "#,
-        code
-    )
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(record.map(|r| (r.code.unwrap_or_default(), r.name)))
-}
-
-pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
-    let records = sqlx::query!(
-        r#"
-        SELECT code, name
-        FROM currencies
-        ORDER BY code
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(records.into_iter().map(|r| (r.code.unwrap_or_default(), r.name)).collect())
 }
