@@ -1051,8 +1051,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_get_rate_map() {
+    #[tokio::test]
+    async fn test_get_rate_map() {
         let rate_map = get_rate_map();
 
         // Test that we have some rates
@@ -1067,6 +1067,81 @@ mod tests {
             has_major_currency,
             "Rate map should contain at least one major currency"
         );
+    }
+
+    #[tokio::test]
+    async fn test_currencies_in_database() -> Result<()> {
+        // Set up database connection
+        let db_url = "sqlite::memory:";  // Use in-memory database for testing
+        let pool = db::create_db_pool(db_url).await?;
+
+        // Add all currencies to the database
+        let currencies_data = [
+            ("USD", "US Dollar"),
+            ("EUR", "Euro"),
+            ("GBP", "British Pound"),
+            ("CHF", "Swiss Franc"),
+            ("SEK", "Swedish Krona"),
+            ("DKK", "Danish Krone"),
+            ("NOK", "Norwegian Krone"),
+            ("JPY", "Japanese Yen"),
+            ("HKD", "Hong Kong Dollar"),
+            ("CNY", "Chinese Yuan"),
+            ("BRL", "Brazilian Real"),
+            ("CAD", "Canadian Dollar"),
+            ("ILS", "Israeli Shekel"),
+            ("ZAR", "South African Rand"),
+        ];
+
+        for (code, name) in currencies_data {
+            db::insert_currency(&pool, code, name).await?;
+        }
+
+        // Get all currency codes from rate_map
+        let rate_map = get_rate_map();
+        let mut currencies: std::collections::HashSet<String> = std::collections::HashSet::new();
+        
+        // Extract unique currency codes from rate pairs
+        for pair in rate_map.keys() {
+            if let Some((from, to)) = pair.split_once('/') {
+                currencies.insert(from.to_string());
+                currencies.insert(to.to_string());
+            }
+        }
+
+        // Check if each currency exists in the database
+        for currency in currencies {
+            let result = db::get_currency(&pool, &currency).await?;
+            assert!(
+                result.is_some(),
+                "Currency {} is used in rate_map but not found in database",
+                currency
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_convert_currency() {
+        let rate_map = HashMap::from([
+            ("EUR/USD".to_string(), 1.1),
+            ("USD/EUR".to_string(), 0.91),
+            ("GBP/USD".to_string(), 1.25),
+            ("USD/GBP".to_string(), 0.8),
+        ]);
+
+        // Test USD to EUR conversion using relative comparison
+        let result = convert_currency(100.0, "USD", "EUR", &rate_map);
+        assert_relative_eq!(result, 91.0, epsilon = 0.01);
+
+        // Test EUR to USD conversion
+        let result = convert_currency(100.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(result, 110.0, epsilon = 0.01);
+
+        // Test same currency
+        let result = convert_currency(100.0, "USD", "USD", &rate_map);
+        assert_relative_eq!(result, 100.0, epsilon = 0.01);
     }
 
     #[tokio::test]
@@ -1090,27 +1165,5 @@ GOOGL,Alphabet Inc.,2000000000000,USD,NASDAQ,130.0";
         let (market_cap, data) = &result[0];
         assert_relative_eq!(*market_cap, 3000000000000.0, epsilon = 0.01);
         assert_eq!(data[0], "AAPL");
-    }
-
-    #[test]
-    fn test_convert_currency() {
-        let rate_map = HashMap::from([
-            ("EUR/USD".to_string(), 1.1),
-            ("USD/EUR".to_string(), 0.91),
-            ("GBP/USD".to_string(), 1.25),
-            ("USD/GBP".to_string(), 0.8),
-        ]);
-
-        // Test USD to EUR conversion using relative comparison
-        let result = convert_currency(100.0, "USD", "EUR", &rate_map);
-        assert_relative_eq!(result, 91.0, epsilon = 0.01);
-
-        // Test EUR to USD conversion
-        let result = convert_currency(100.0, "EUR", "USD", &rate_map);
-        assert_relative_eq!(result, 110.0, epsilon = 0.01);
-
-        // Test same currency
-        let result = convert_currency(100.0, "USD", "USD", &rate_map);
-        assert_relative_eq!(result, 100.0, epsilon = 0.01);
     }
 }
