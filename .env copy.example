@@ -3,4 +3,4 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 POLYGON_API_KEY=
 FINANCIALMODELINGPREP_API_KEY=
-DATABASE_URL=sqlite:data.db
+DATABASE_URL=sqlite:top200.db
