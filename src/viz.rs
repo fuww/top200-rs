@@ -270,3 +270,9 @@ pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Resul
     root.present()?;
     Ok(())
 }
+
+pub fn create_visualizations(stocks: Vec<StockData>, heatmap_path: &str, histogram_path: &str) -> Result<()> {
+    create_market_heatmap(stocks.clone(), heatmap_path)?;
+    crate::histogram::create_market_cap_histogram(&stocks, histogram_path)?;
+    Ok(())
+}
