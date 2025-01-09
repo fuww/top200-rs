@@ -332,6 +332,11 @@ mod tests {
         let mut rate_map = HashMap::new();
         rate_map.insert("EUR/USD".to_string(), 1.08);
         rate_map.insert("USD/EUR".to_string(), 0.9259259259259258);
+        rate_map.insert("GBP/USD".to_string(), 1.25);
+        rate_map.insert("USD/GBP".to_string(), 0.8);
+        rate_map.insert("EUR/GBP".to_string(), 0.864);
+        rate_map.insert("ZAR/USD".to_string(), 0.053);
+        rate_map.insert("ILS/USD".to_string(), 0.27);
 
         // Test direct conversion
         let result = convert_currency(100.0, "EUR", "USD", &rate_map);
@@ -344,6 +349,29 @@ mod tests {
         // Test same currency
         let result = convert_currency(100.0, "USD", "USD", &rate_map);
         assert_relative_eq!(result, 100.0, epsilon = 0.01);
+
+        // Test currency subunit conversions
+        let result = convert_currency(1000.0, "GBp", "USD", &rate_map);
+        assert_relative_eq!(result, 12.5, epsilon = 0.01); // 1000 pence = 10 GBP, 10 GBP = 12.5 USD
+
+        let result = convert_currency(1000.0, "ZAc", "USD", &rate_map);
+        assert_relative_eq!(result, 0.53, epsilon = 0.01); // 1000 cents = 10 ZAR, 10 ZAR = 0.53 USD
+
+        // Test alternative code conversion
+        let result = convert_currency(100.0, "ILA", "USD", &rate_map);
+        assert_relative_eq!(result, 27.0, epsilon = 0.01); // ILA is treated as ILS
+
+        // Test cross-rate conversion
+        let result = convert_currency(100.0, "EUR", "GBP", &rate_map);
+        assert_relative_eq!(result, 86.4, epsilon = 0.01);
+
+        // Test conversion to subunit
+        let result = convert_currency(10.0, "USD", "GBp", &rate_map);
+        assert_relative_eq!(result, 800.0, epsilon = 0.01); // 10 USD = 8 GBP = 800 pence
+
+        // Test missing rate
+        let result = convert_currency(100.0, "XXX", "USD", &rate_map);
+        assert_relative_eq!(result, 100.0, epsilon = 0.01); // Should return original amount
     }
 
     #[tokio::test]
@@ -374,6 +402,58 @@ mod tests {
         assert_eq!(symbols.len(), 2);
         assert!(symbols.contains(&"EURUSD".to_string()));
         assert!(symbols.contains(&"GBPUSD".to_string()));
+
+        // Test getting non-existent rate
+        let missing = get_latest_forex_rate(&pool, "XXXYYY").await?;
+        assert!(missing.is_none());
+
+        // Test getting rates with empty range
+        let empty_range = get_forex_rates(&pool, "EURUSD", 1701956303, 1701956304).await?;
+        assert!(empty_range.is_empty());
+
+        // Test rate update with same timestamp (should update values)
+        insert_forex_rate(&pool, "EURUSD", 1.07835, 1.07834, 1701956302).await?;
+        let updated = get_latest_forex_rate(&pool, "EURUSD").await?;
+        assert!(updated.is_some());
+        let (ask, bid, timestamp) = updated.unwrap();
+        assert_relative_eq!(ask, 1.07835, epsilon = 0.00001);
+        assert_relative_eq!(bid, 1.07834, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956302);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_currency_operations() -> Result<()> {
+        let db_url = "sqlite::memory:";
+        let pool = crate::db::create_db_pool(db_url).await?;
+
+        // Test inserting and retrieving a currency
+        insert_currency(&pool, "XYZ", "Test Currency").await?;
+        let currency = get_currency(&pool, "XYZ").await?;
+        assert!(currency.is_some());
+        let (code, name) = currency.unwrap();
+        assert_eq!(code, "XYZ");
+        assert_eq!(name, "Test Currency");
+
+        // Test updating an existing currency
+        insert_currency(&pool, "XYZ", "Updated Currency").await?;
+        let updated = get_currency(&pool, "XYZ").await?;
+        assert!(updated.is_some());
+        let (code, name) = updated.unwrap();
+        assert_eq!(code, "XYZ");
+        assert_eq!(name, "Updated Currency");
+
+        // Test getting non-existent currency
+        let missing = get_currency(&pool, "NON").await?;
+        assert!(missing.is_none());
+
+        // Test listing currencies
+        insert_currency(&pool, "ABC", "Another Currency").await?;
+        let currencies = list_currencies(&pool).await?;
+        assert_eq!(currencies.len(), 2);
+        assert!(currencies.iter().any(|(c, _)| c == "XYZ"));
+        assert!(currencies.iter().any(|(c, _)| c == "ABC"));
 
         Ok(())
     }

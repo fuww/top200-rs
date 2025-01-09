@@ -1,10 +1,13 @@
+#!/bin/bash
 docker pull docker.all-hands.dev/all-hands-ai/runtime:0.19-nikolaik
 
 export WORKSPACE_BASE=$HOME/git/top200-rs
 
 # export LLM_PROVIDER=OPENAI
-# export LLM_MODEL=gpt-4o
+export LLM_MODEL="anthropic/claude-3-5-sonnet-20241022"
 # export OPENAI_API_KEY=sk-
+
+export $(cat .env | xargs)
 
 docker run -it --rm --pull=always \
     -e SANDBOX_USER_ID=$(id -u) \
@@ -19,4 +22,8 @@ docker run -it --rm --pull=always \
     --name openhands-app \
     docker.all-hands.dev/all-hands-ai/openhands:0.19
 
-    
+# Vertex ai
+
+    # -e GOOGLE_APPLICATION_CREDENTIALS="<json-dump-of-gcp-service-account-json>" \
+    # -e VERTEXAI_PROJECT="<your-gcp-project-id>" \
+    # -e VERTEXAI_LOCATION="<your-gcp-location>" \
