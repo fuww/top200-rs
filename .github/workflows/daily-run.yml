@@ -18,22 +18,13 @@ env:
   POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
 
 jobs:
-  collect-data:
+  lockfile:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Nix Flake Checker
-        uses: DeterminateSystems/flake-checker-action@v9    
-
-      - uses: cachix/install-nix-action@v24
-        with:
-          install_url: https://github.com/numtide/nix-unstable-installer/releases/download/nix-2.10.0pre20220629_b7eb4ac/install
-          nix_path: nixpkgs=channel:nixos-24.11
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
       - name: Update flake.lock
         uses: DeterminateSystems/update-flake-lock@main
         with:
@@ -41,6 +32,16 @@ jobs:
           pr-labels: |                  # Labels to be set on the PR
             dependencies
             automated
+  collect-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Nix Flake Checker
+        uses: DeterminateSystems/flake-checker-action@v9
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+            
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - uses: cachix/cachix-action@v13
         with:
