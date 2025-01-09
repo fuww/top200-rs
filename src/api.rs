@@ -21,6 +21,7 @@ pub struct PolygonClient {
     api_key: String,
 }
 
+#[derive(Clone)]
 pub struct FMPClient {
     client: Client,
     api_key: String,

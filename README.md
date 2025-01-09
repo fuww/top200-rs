@@ -12,6 +12,18 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 - add a command so I can test with just a few tickers
 
+## Run
+
+```sh
+nix develop
+cargo run
+
+# or
+cargo run -- export-us
+cargo run -- export-eu
+cargo run -- export-combined
+```
+
 ## Database
 
 ```sh
@@ -21,6 +33,10 @@ sqlx migrate run
 # first time only
 sqlx migrate add init
 ```
+
+## Calculate market caps history
+
+Many analysts use the last trading day of each year to calculate yearly market cap snapshots. This ensures a consistent reference point and reflects end-of-year valuations. Other methods include averaging across each year or using the first trading day, but the closing price on December 31 (or the final trading session) is most common.
 
 ## License
 

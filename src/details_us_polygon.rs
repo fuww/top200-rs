@@ -1,4 +1,4 @@
-use crate::api::{self, PolygonClient};
+use crate::api::PolygonClient;
 use crate::config;
 use anyhow::Result;
 use chrono::{Local, NaiveDate};

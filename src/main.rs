@@ -9,6 +9,7 @@ mod db;
 mod details_eu_fmp;
 mod details_us_polygon;
 mod exchange_rates;
+mod marketcaps;
 mod models;
 mod utils;
 mod viz;
@@ -17,14 +18,14 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::env;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Debug, Subcommand)]
 enum Commands {
     /// Export US market caps to CSV
     ExportUs,
@@ -58,8 +59,8 @@ async fn main() -> Result<()> {
         Some(Commands::ExportUs) => details_us_polygon::export_details_us_csv().await?,
         Some(Commands::ExportEu) => details_eu_fmp::export_details_eu_csv().await?,
         Some(Commands::ExportCombined) => {
-            details_us_polygon::export_details_us_csv().await?;
-            details_eu_fmp::export_details_eu_csv().await?;
+            // details_us_polygon::export_details_us_csv().await?;
+            // details_eu_fmp::export_details_eu_csv().await?;
             marketcaps::marketcaps().await?;
         }
         Some(Commands::ListUs) => details_us_polygon::list_details_us().await?,
