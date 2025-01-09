@@ -362,3 +362,26 @@ pub struct ExchangeRate {
     pub previous_close: Option<f64>,
     pub timestamp: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_empty_ticker() {
+        let client = FMPClient::new("test_key".to_string());
+        let rate_map = HashMap::new();
+        let result = client.get_details("", &rate_map).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("ticker empty"));
+
+        let client = PolygonClient::new("test_key".to_string());
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let result = client.get_details("", date).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("ticker empty"));
+    }
+}

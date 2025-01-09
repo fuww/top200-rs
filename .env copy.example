@@ -1,6 +1,0 @@
-# SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
-#
-# SPDX-License-Identifier: AGPL-3.0-only
-POLYGON_API_KEY=
-FINANCIALMODELINGPREP_API_KEY=
-DATABASE_URL=sqlite:top200.db
