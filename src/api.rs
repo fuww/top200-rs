@@ -13,7 +13,7 @@ use std::{env, time::Duration};
 use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
-use crate::convert_currency;
+use crate::currencies::convert_currency;
 use crate::models::{Details, FMPCompanyProfile, FMPIncomeStatement, FMPRatios, PolygonResponse};
 
 pub struct PolygonClient {
