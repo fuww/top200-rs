@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
+use crate::api::ExchangeRate;
 use anyhow::Result;
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
-use crate::api::ExchangeRate;
 
 pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
     // Create database if it doesn't exist
@@ -26,7 +26,7 @@ pub async fn store_forex_rates(pool: &SqlitePool, rates: &[ExchangeRate]) -> Res
         // Skip if we don't have the required fields
         let (Some(name), Some(bid), Some(ask)) = (
             rate.name.as_ref(),
-            rate.previous_close,  // Using previous_close as bid
+            rate.previous_close, // Using previous_close as bid
             rate.price,          // Using current price as ask
         ) else {
             continue;
