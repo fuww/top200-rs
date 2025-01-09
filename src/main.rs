@@ -66,7 +66,8 @@ async fn main() -> Result<()> {
         Some(Commands::ListUs) => details_us_polygon::list_details_us().await?,
         Some(Commands::ListEu) => details_eu_fmp::list_details_eu().await?,
         Some(Commands::ExportRates) => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
+                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             exchange_rates::export_exchange_rates_csv(&fmp_client).await?;
         }
@@ -91,7 +92,8 @@ async fn main() -> Result<()> {
             output_top_100_active()?;
         }
         None => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY").expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
+                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             exchange_rates::export_exchange_rates_csv(&fmp_client).await?;
         }
@@ -120,7 +122,10 @@ fn read_csv_with_market_cap(file_path: &std::path::Path) -> Result<Vec<(f64, Vec
             market_cap // Default to original value if currency is unknown
         };
 
-        results.push((market_cap_eur, record.iter().map(|s| s.to_string()).collect()));
+        results.push((
+            market_cap_eur,
+            record.iter().map(|s| s.to_string()).collect(),
+        ));
     }
 
     // Sort by market cap in descending order

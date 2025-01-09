@@ -91,18 +91,10 @@ pub async fn marketcaps() -> Result<()> {
             Ok(details) => {
                 let original_market_cap = details.market_cap.unwrap_or(0.0);
                 let currency = details.currency_symbol.clone().unwrap_or_default();
-                let eur_market_cap = convert_currency(
-                    original_market_cap,
-                    &currency,
-                    "EUR",
-                    &rate_map,
-                );
-                let usd_market_cap = convert_currency(
-                    original_market_cap,
-                    &currency,
-                    "USD",
-                    &rate_map,
-                );
+                let eur_market_cap =
+                    convert_currency(original_market_cap, &currency, "EUR", &rate_map);
+                let usd_market_cap =
+                    convert_currency(original_market_cap, &currency, "USD", &rate_map);
 
                 Some((
                     eur_market_cap,
@@ -323,18 +315,10 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
             Ok(details) => {
                 let original_market_cap = details.market_cap.unwrap_or(0.0);
                 let currency = details.currency_symbol.clone().unwrap_or_default();
-                let eur_market_cap = convert_currency(
-                    original_market_cap,
-                    &currency,
-                    "EUR",
-                    &rate_map,
-                );
-                let usd_market_cap = convert_currency(
-                    original_market_cap,
-                    &currency,
-                    "USD",
-                    &rate_map,
-                );
+                let eur_market_cap =
+                    convert_currency(original_market_cap, &currency, "EUR", &rate_map);
+                let usd_market_cap =
+                    convert_currency(original_market_cap, &currency, "USD", &rate_map);
 
                 Some((
                     eur_market_cap,
