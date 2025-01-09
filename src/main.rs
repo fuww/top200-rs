@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
         //     marketcaps::output_top_100_active()?;
         // }
         None => {
-            marketcaps::marketcaps().await?; 
+            marketcaps::marketcaps().await?;
         }
     }
 
