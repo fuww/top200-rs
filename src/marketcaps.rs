@@ -6,9 +6,9 @@ use chrono::Local;
 use csv::Writer;
 use futures::stream::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
-use std::fs;
 
 pub async fn marketcaps() -> Result<()> {
     let config = config::load_config()?;
@@ -84,7 +84,7 @@ pub async fn marketcaps() -> Result<()> {
             .progress_chars("=>-"),
     );
 
-    // Process tickers sequentially 
+    // Process tickers sequentially
     for ticker in tickers {
         let rate_map = rate_map.clone();
         let fmp_client = fmp_client.clone();
@@ -321,7 +321,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
             .progress_chars("=>-"),
     );
 
-    // Process tickers sequentially 
+    // Process tickers sequentially
     for ticker in tickers {
         let rate_map = rate_map.clone();
         let fmp_client = fmp_client.clone();
