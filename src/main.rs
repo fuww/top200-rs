@@ -92,18 +92,6 @@ async fn main() -> Result<()> {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
-            let rates = fmp_client.get_exchange_rates().await?;
-
-            // Store rates in the database
-            for rate in &rates {
-                if let (Some(name), Some(price)) = (&rate.name, rate.price) {
-                    // We'll use the price as both ask and bid since the API doesn't provide spread
-                    currencies::insert_forex_rate(&pool, name, price, price, rate.timestamp)
-                        .await?;
-                }
-            }
-
-            // Export to CSV as before
             export_exchange_rates_csv(&fmp_client).await?;
         }
         Some(Commands::ListUs) => list_details_us().await?,
@@ -642,6 +630,10 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
     let file = std::fs::File::create(&filename)?;
     let mut writer = csv::Writer::from_writer(file);
 
+    // Create database connection pool
+    let db_url = "sqlite:top200.db";
+    let pool = db::create_db_pool(db_url).await?;
+
     // Write headers
     writer.write_record(&[
         "Symbol",
@@ -657,6 +649,9 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
 
     match fmp_client.get_exchange_rates().await {
         Ok(rates) => {
+            // Store rates in database
+            db::store_forex_rates(&pool, &rates).await?;
+
             for rate in rates {
                 // Split the symbol into base and quote currencies (e.g., "EUR/USD" -> ["EUR", "USD"])
                 let currencies: Vec<&str> = rate.name.as_deref().unwrap_or("").split('/').collect();
@@ -686,7 +681,7 @@ async fn export_exchange_rates_csv(fmp_client: &api::FMPClient) -> Result<()> {
                     &rate.timestamp.to_string(),
                 ])?;
             }
-            println!("✅ Exchange rates written to CSV");
+            println!("✅ Exchange rates written to CSV and database");
         }
         Err(e) => {
             eprintln!("Error fetching exchange rates: {}", e);

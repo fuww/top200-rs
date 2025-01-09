@@ -4,6 +4,7 @@
 
 use anyhow::Result;
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
+use crate::api::ExchangeRate;
 
 pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
     // Create database if it doesn't exist
@@ -18,4 +19,35 @@ pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
     sqlx::migrate!().run(&pool).await?;
 
     Ok(pool)
+}
+
+pub async fn store_forex_rates(pool: &SqlitePool, rates: &[ExchangeRate]) -> Result<()> {
+    for rate in rates {
+        // Skip if we don't have the required fields
+        let (Some(name), Some(bid), Some(ask)) = (
+            rate.name.as_ref(),
+            rate.previous_close,  // Using previous_close as bid
+            rate.price,          // Using current price as ask
+        ) else {
+            continue;
+        };
+
+        sqlx::query!(
+            r#"
+            INSERT INTO forex_rates (symbol, bid, ask, timestamp)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(symbol, timestamp) DO UPDATE SET
+                bid = excluded.bid,
+                ask = excluded.ask
+            "#,
+            name,
+            bid,
+            ask,
+            rate.timestamp
+        )
+        .execute(pool)
+        .await?;
+    }
+
+    Ok(())
 }
