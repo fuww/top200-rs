@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use crate::api::ExchangeRate;
+use crate::currencies;
 use anyhow::Result;
 use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
 
@@ -32,6 +33,7 @@ pub async fn store_forex_rates(pool: &SqlitePool, rates: &[ExchangeRate]) -> Res
             continue;
         };
 
+        // Store the forex rate
         sqlx::query!(
             r#"
             INSERT INTO forex_rates (symbol, bid, ask, timestamp)
@@ -47,6 +49,15 @@ pub async fn store_forex_rates(pool: &SqlitePool, rates: &[ExchangeRate]) -> Res
         )
         .execute(pool)
         .await?;
+
+        // Extract and store the currencies
+        if let Some(pair) = name.split_once('/') {
+            let (base, quote) = pair;
+            // Store base currency
+            currencies::insert_currency(pool, base, &format!("{} Currency", base)).await?;
+            // Store quote currency
+            currencies::insert_currency(pool, quote, &format!("{} Currency", quote)).await?;
+        }
     }
 
     Ok(())
