@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::sync::Arc;
 use std::time::Duration;
+use std::fs;
 
 pub async fn marketcaps() -> Result<()> {
     let config = config::load_config()?;
@@ -45,6 +46,7 @@ pub async fn marketcaps() -> Result<()> {
 
     // Write headers
     writer.write_record(&[
+        "Symbol",
         "Ticker",
         "Name",
         "Market Cap (Original)",
@@ -99,6 +101,7 @@ pub async fn marketcaps() -> Result<()> {
                 Some((
                     eur_market_cap,
                     vec![
+                        details.ticker.clone(), // Symbol
                         details.ticker,
                         details.name.unwrap_or_default(),
                         original_market_cap.round().to_string(),
@@ -177,7 +180,7 @@ pub async fn marketcaps() -> Result<()> {
     // Filter active tickers and get top 100
     let top_100_results: Vec<(f64, Vec<String>)> = results
         .iter()
-        .filter(|(_, record)| record[8] == "true") // Active column
+        .filter(|(_, record)| record[9] == "true") // Active column
         .take(100)
         .map(|(cap, record)| (*cap, record.clone()))
         .collect();
@@ -189,6 +192,7 @@ pub async fn marketcaps() -> Result<()> {
 
     // Write headers
     top_100_writer.write_record(&[
+        "Symbol",
         "Ticker",
         "Name",
         "Market Cap (Original)",
@@ -235,7 +239,7 @@ pub fn generate_heatmap_from_top_100(timestamp: &str) -> Result<()> {
         if record.len() >= 12 {
             stock_data.push(crate::viz::StockData {
                 symbol: record[0].to_string(),
-                market_cap_eur: record[4].parse::<f64>().unwrap_or_default(),
+                market_cap_eur: record[5].parse::<f64>().unwrap_or_default(),
                 employees: record[11].to_string(),
             });
         }
@@ -280,6 +284,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
 
     // Write headers
     writer.write_record(&[
+        "Symbol",
         "Ticker",
         "Name",
         "Market Cap (Original)",
@@ -334,6 +339,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
                 Some((
                     eur_market_cap,
                     vec![
+                        details.ticker.clone(), // Symbol
                         details.ticker,
                         details.name.unwrap_or_default(),
                         original_market_cap.round().to_string(),
@@ -412,7 +418,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
     // Filter active tickers and get top 100
     let top_100_results: Vec<(f64, Vec<String>)> = results
         .iter()
-        .filter(|(_, record)| record[8] == "true") // Active column
+        .filter(|(_, record)| record[9] == "true") // Active column
         .take(100)
         .map(|(cap, record)| (*cap, record.clone()))
         .collect();
@@ -424,6 +430,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
 
     // Write headers
     top_100_writer.write_record(&[
+        "Symbol",
         "Ticker",
         "Name",
         "Market Cap (Original)",
