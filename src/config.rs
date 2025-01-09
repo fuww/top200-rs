@@ -26,7 +26,11 @@ impl Default for Config {
                 "LVMH.PA".to_string(),
                 "ITX.MC".to_string(),
             ],
-            us_tickers: vec!["NKE".to_string(), "TJX".to_string(), "VFC".to_string()],
+            us_tickers: vec![
+                "NKE".to_string(),
+                "TJX".to_string(),
+                "VFC".to_string(),
+            ],
         }
     }
 }

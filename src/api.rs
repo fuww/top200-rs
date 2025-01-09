@@ -14,7 +14,9 @@ use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
 use crate::convert_currency;
-use crate::models::{Details, FMPCompanyProfile, FMPIncomeStatement, FMPRatios, PolygonResponse};
+use crate::models::{
+    Details, FMPCompanyProfile, FMPIncomeStatement, FMPRatios, PolygonResponse,
+};
 
 pub struct PolygonClient {
     client: Client,
@@ -39,7 +41,10 @@ impl FMPClient {
         }
     }
 
-    async fn make_request<T: for<'de> Deserialize<'de>>(&self, url: String) -> Result<T> {
+    async fn make_request<T: for<'de> Deserialize<'de>>(
+        &self,
+        url: String,
+    ) -> Result<T> {
         let mut retries = 0;
         let max_retries = 3;
         let mut delay = Duration::from_secs(5);
@@ -91,9 +96,15 @@ impl FMPClient {
                     return Ok(result);
                 }
                 Err(e) => {
-                    eprintln!("Failed to parse response for URL {}: {}", url, e);
+                    eprintln!(
+                        "Failed to parse response for URL {}: {}",
+                        url, e
+                    );
                     eprintln!("Response text: {}", text);
-                    return Err(anyhow::anyhow!("Failed to parse response: {}", e));
+                    return Err(anyhow::anyhow!(
+                        "Failed to parse response: {}",
+                        e
+                    ));
                 }
             }
         }
@@ -155,11 +166,15 @@ impl FMPClient {
             revenue: income.as_ref().and_then(|i| i.revenue),
             revenue_usd: None,
             timestamp: Some(timestamp),
-            working_capital_ratio: ratios.as_ref().and_then(|r| r.current_ratio),
+            working_capital_ratio: ratios
+                .as_ref()
+                .and_then(|r| r.current_ratio),
             quick_ratio: ratios.as_ref().and_then(|r| r.quick_ratio),
             eps: ratios.as_ref().and_then(|r| r.eps),
             pe_ratio: ratios.as_ref().and_then(|r| r.price_earnings_ratio),
-            debt_equity_ratio: ratios.as_ref().and_then(|r| r.debt_equity_ratio),
+            debt_equity_ratio: ratios
+                .as_ref()
+                .and_then(|r| r.debt_equity_ratio),
             roe: ratios.as_ref().and_then(|r| r.return_on_equity),
             extra: {
                 let mut map = std::collections::HashMap::new();
@@ -180,7 +195,8 @@ impl FMPClient {
 
         // Calculate revenue in USD if available
         if let Some(rev) = details.revenue {
-            details.revenue_usd = Some(convert_currency(rev, currency, "USD", rate_map));
+            details.revenue_usd =
+                Some(convert_currency(rev, currency, "USD", rate_map));
         }
 
         Ok(details)
@@ -214,15 +230,18 @@ impl FMPClient {
             anyhow::bail!("API request failed: {}", text);
         }
 
-        let ratios: Vec<FMPRatios> =
-            serde_json::from_str(&text).context("Failed to parse FMP ratios response")?;
+        let ratios: Vec<FMPRatios> = serde_json::from_str(&text)
+            .context("Failed to parse FMP ratios response")?;
 
         // Get the most recent ratios (first in the list)
         Ok(ratios.into_iter().next())
     }
 
     #[allow(dead_code)]
-    pub async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>> {
+    pub async fn get_income_statement(
+        &self,
+        ticker: &str,
+    ) -> Result<Option<FMPIncomeStatement>> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
         }
@@ -250,7 +269,8 @@ impl FMPClient {
         }
 
         let statements: Vec<FMPIncomeStatement> =
-            serde_json::from_str(&text).context("Failed to parse FMP income statement response")?;
+            serde_json::from_str(&text)
+                .context("Failed to parse FMP income statement response")?;
 
         // Get the most recent statement (first in the list)
         Ok(statements.into_iter().next())
@@ -262,14 +282,23 @@ impl FMPClient {
             self.api_key
         );
 
-        let response = self.client.get(&url).send().await
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .context("Failed to send request to FMP forex API")?;
 
         if !response.status().is_success() {
-            anyhow::bail!("API request failed with status: {}", response.status());
+            anyhow::bail!(
+                "API request failed with status: {}",
+                response.status()
+            );
         }
 
-        let rates: Vec<ExchangeRate> = response.json().await
+        let rates: Vec<ExchangeRate> = response
+            .json()
+            .await
             .context("Failed to parse forex rates response")?;
         Ok(rates)
     }
@@ -283,7 +312,11 @@ impl PolygonClient {
         }
     }
 
-    pub async fn get_details(&self, ticker: &str, date: NaiveDate) -> Result<Details> {
+    pub async fn get_details(
+        &self,
+        ticker: &str,
+        date: NaiveDate,
+    ) -> Result<Details> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
         }
@@ -324,7 +357,10 @@ impl PolygonClient {
     }
 }
 
-pub async fn get_details_eu(ticker: &str, rate_map: &HashMap<String, f64>) -> Result<Details> {
+pub async fn get_details_eu(
+    ticker: &str,
+    rate_map: &HashMap<String, f64>,
+) -> Result<Details> {
     let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
         .expect("FINANCIALMODELINGPREP_API_KEY must be set");
     let client = FMPClient::new(api_key);

@@ -37,15 +37,22 @@ fn worst_ratio(row: &[(f64, StockData)], width: f64) -> f64 {
     })
 }
 
-fn layout_row(row: &[(f64, StockData)], width: i32, x: i32, y: i32) -> Vec<(Rectangle, StockData)> {
+fn layout_row(
+    row: &[(f64, StockData)],
+    width: i32,
+    x: i32,
+    y: i32,
+) -> Vec<(Rectangle, StockData)> {
     let _total_area: f64 = row.iter().map(|(area, _)| *area).sum::<f64>();
-    let height = (row.iter().map(|(area, _)| *area).sum::<f64>() / width as f64) as i32;
+    let height =
+        (row.iter().map(|(area, _)| *area).sum::<f64>() / width as f64) as i32;
     let mut current_x = x;
     let mut result = Vec::new();
 
     for (area, stock) in row {
-        let rect_width =
-            (*area / row.iter().map(|(area, _)| *area).sum::<f64>() * width as f64) as i32;
+        let rect_width = (*area
+            / row.iter().map(|(area, _)| *area).sum::<f64>()
+            * width as f64) as i32;
         result.push((
             Rectangle {
                 x: current_x,
@@ -107,7 +114,8 @@ fn squarify(
                     .collect()
             };
 
-            let current_area: f64 = current_row.iter().map(|(area, _)| *area).sum::<f64>();
+            let current_area: f64 =
+                current_row.iter().map(|(area, _)| *area).sum::<f64>();
             let remaining_width = if width < height {
                 width
             } else {
@@ -169,11 +177,15 @@ fn squarify(
     }
 }
 
-pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Result<()> {
+pub fn create_market_heatmap(
+    stocks: Vec<StockData>,
+    output_path: &str,
+) -> Result<()> {
     let width = 1200i32;
     let height = 1200i32;
 
-    let root = BitMapBackend::new(output_path, (width as u32, height as u32)).into_drawing_area();
+    let root = BitMapBackend::new(output_path, (width as u32, height as u32))
+        .into_drawing_area();
 
     root.fill(&WHITE)?;
 
@@ -187,10 +199,13 @@ pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Resul
 
     // Sort stocks by market cap
     let mut sorted_stocks = stocks;
-    sorted_stocks.sort_by(|a, b| b.market_cap_eur.partial_cmp(&a.market_cap_eur).unwrap());
+    sorted_stocks.sort_by(|a, b| {
+        b.market_cap_eur.partial_cmp(&a.market_cap_eur).unwrap()
+    });
 
     // Calculate total market cap and normalize areas
-    let total_market_cap: f64 = sorted_stocks.iter().map(|s| s.market_cap_eur).sum();
+    let total_market_cap: f64 =
+        sorted_stocks.iter().map(|s| s.market_cap_eur).sum();
     let usable_width = width - 100;
     let usable_height = height - 100;
     let total_area = (usable_width * usable_height) as f64;
@@ -215,7 +230,8 @@ pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Resul
     // Draw rectangles
     for (rect, stock) in rectangles {
         // Calculate color based on market cap (green gradient)
-        let relative_market_cap = stock.market_cap_eur / sorted_stocks[0].market_cap_eur;
+        let relative_market_cap =
+            stock.market_cap_eur / sorted_stocks[0].market_cap_eur;
         let color = RGBColor(
             (100.0 * (1.0 - relative_market_cap as f32)) as u8,
             (200.0 * relative_market_cap as f32) as u8,
@@ -245,12 +261,17 @@ pub fn create_market_heatmap(stocks: Vec<StockData>, output_path: &str) -> Resul
         // Calculate font size based on rectangle size
         let min_dimension = rect.width.min(rect.height);
         let font_size = ((min_dimension as f32 * 0.2) as i32).clamp(10, 32);
-        let text_style = ("sans-serif", font_size as u32).into_font().color(&BLACK);
+        let text_style =
+            ("sans-serif", font_size as u32).into_font().color(&BLACK);
 
         // Draw text if rectangle is large enough
         if min_dimension > 40 {
             // Draw symbol
-            root.draw_text(&stock.symbol, &text_style, (rect.x + 5, rect.y + font_size))?;
+            root.draw_text(
+                &stock.symbol,
+                &text_style,
+                (rect.x + 5, rect.y + font_size),
+            )?;
 
             // Format market cap in billions
             let market_cap_b = stock.market_cap_eur / 1_000_000_000.0;
