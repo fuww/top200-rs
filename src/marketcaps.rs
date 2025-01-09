@@ -84,7 +84,7 @@ pub async fn marketcaps() -> Result<()> {
             .progress_chars("=>-"),
     );
 
-    // Process tickers sequentially with delay to avoid rate limits
+    // Process tickers sequentially 
     for ticker in tickers {
         let rate_map = rate_map.clone();
         let fmp_client = fmp_client.clone();
@@ -158,7 +158,6 @@ pub async fn marketcaps() -> Result<()> {
         }
 
         progress.inc(1);
-        tokio::time::sleep(Duration::from_millis(500)).await; // Add delay between requests
     }
 
     progress.finish_with_message("Data collection complete");
@@ -322,7 +321,7 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
             .progress_chars("=>-"),
     );
 
-    // Process tickers sequentially with delay to avoid rate limits
+    // Process tickers sequentially 
     for ticker in tickers {
         let rate_map = rate_map.clone();
         let fmp_client = fmp_client.clone();
@@ -396,7 +395,6 @@ async fn export_marketcaps(fmp_client: &api::FMPClient) -> Result<()> {
         }
 
         progress.inc(1);
-        tokio::time::sleep(Duration::from_millis(500)).await; // Add delay between requests
     }
 
     progress.finish_with_message("Data collection complete");

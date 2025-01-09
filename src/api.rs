@@ -30,8 +30,8 @@ pub struct FMPClient {
 
 impl FMPClient {
     pub fn new(api_key: String) -> Self {
-        // Reduce concurrent requests to 100 to stay well within the rate limit
-        let rate_limiter = Arc::new(Semaphore::new(100));
+        // Allow up to 300 concurrent requests per minute
+        let rate_limiter = Arc::new(Semaphore::new(300));
 
         Self {
             client: Client::new(),
