@@ -7,11 +7,7 @@ use sqlx::sqlite::SqlitePool;
 use std::collections::HashMap;
 
 /// Insert a currency into the database
-pub async fn insert_currency(
-    pool: &SqlitePool,
-    code: &str,
-    name: &str,
-) -> Result<()> {
+pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO currencies (code, name)
@@ -30,10 +26,7 @@ pub async fn insert_currency(
 }
 
 /// Get a currency from the database by its code
-pub async fn get_currency(
-    pool: &SqlitePool,
-    code: &str,
-) -> Result<Option<(String, String)>> {
+pub async fn get_currency(pool: &SqlitePool, code: &str) -> Result<Option<(String, String)>> {
     let record = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT code, name
@@ -49,9 +42,7 @@ pub async fn get_currency(
 }
 
 /// List all currencies in the database
-pub async fn list_currencies(
-    pool: &SqlitePool,
-) -> Result<Vec<(String, String)>> {
+pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
     let records = sqlx::query_as::<_, (String, String)>(
         r#"
         SELECT code, name
@@ -100,10 +91,7 @@ pub fn get_rate_map() -> HashMap<String, f64> {
                 if let Some(("USD", to2)) = pair2.split_once('/') {
                     if from1 != to2 {
                         // Calculate cross rate: from1/to2 = (from1/USD) * (USD/to2)
-                        pairs_to_add.push((
-                            format!("{}/{}", from1, to2),
-                            rate1 * rate2,
-                        ));
+                        pairs_to_add.push((format!("{}/{}", from1, to2), rate1 * rate2));
                     }
                 }
             }
@@ -146,8 +134,7 @@ pub fn convert_currency(
     };
 
     // Try direct conversion first
-    let direct_rate =
-        format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
+    let direct_rate = format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
     if let Some(&rate) = rate_map.get(&direct_rate) {
         let result = adjusted_amount * rate;
         return match to_currency {
@@ -158,8 +145,7 @@ pub fn convert_currency(
     }
 
     // Try reverse rate
-    let reverse_rate =
-        format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
+    let reverse_rate = format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
     if let Some(&rate) = rate_map.get(&reverse_rate) {
         let result = adjusted_amount * (1.0 / rate);
         return match to_currency {
@@ -275,8 +261,7 @@ mod tests {
         let pool = crate::db::create_db_pool(db_url).await?;
 
         // Test that we can insert and retrieve forex rates
-        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301)
-            .await?;
+        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301).await?;
 
         // Check that we can retrieve the rate
         let rate = get_latest_forex_rate(&pool, "EURUSD").await?;
@@ -319,8 +304,7 @@ mod tests {
 
         // Get all currency codes from rate_map
         let rate_map = get_rate_map();
-        let mut currencies: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut currencies: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         // Extract unique currency codes from rate pairs
         for pair in rate_map.keys() {
@@ -397,12 +381,9 @@ mod tests {
         let pool = crate::db::create_db_pool(db_url).await?;
 
         // Insert some test data
-        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301)
-            .await?;
-        insert_forex_rate(&pool, "EURUSD", 1.07834, 1.07833, 1701956302)
-            .await?;
-        insert_forex_rate(&pool, "GBPUSD", 1.25001, 1.25000, 1701956301)
-            .await?;
+        insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301).await?;
+        insert_forex_rate(&pool, "EURUSD", 1.07834, 1.07833, 1701956302).await?;
+        insert_forex_rate(&pool, "GBPUSD", 1.25001, 1.25000, 1701956301).await?;
 
         // Test getting latest rate
         let latest = get_latest_forex_rate(&pool, "EURUSD").await?;
@@ -413,8 +394,7 @@ mod tests {
         assert_eq!(timestamp, 1701956302);
 
         // Test getting rates in range
-        let rates =
-            get_forex_rates(&pool, "EURUSD", 1701956300, 1701956303).await?;
+        let rates = get_forex_rates(&pool, "EURUSD", 1701956300, 1701956303).await?;
         assert_eq!(rates.len(), 2);
 
         // Test listing symbols
@@ -428,13 +408,11 @@ mod tests {
         assert!(missing.is_none());
 
         // Test getting rates with empty range
-        let empty_range =
-            get_forex_rates(&pool, "EURUSD", 1701956303, 1701956304).await?;
+        let empty_range = get_forex_rates(&pool, "EURUSD", 1701956303, 1701956304).await?;
         assert!(empty_range.is_empty());
 
         // Test rate update with same timestamp (should update values)
-        insert_forex_rate(&pool, "EURUSD", 1.07835, 1.07834, 1701956302)
-            .await?;
+        insert_forex_rate(&pool, "EURUSD", 1.07835, 1.07834, 1701956302).await?;
         let updated = get_latest_forex_rate(&pool, "EURUSD").await?;
         assert!(updated.is_some());
         let (ask, bid, timestamp) = updated.unwrap();

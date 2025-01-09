@@ -240,8 +240,7 @@ mod tests {
             "revenue": 365000000000.0
         });
 
-        let statement: FMPIncomeStatement =
-            serde_json::from_value(json).unwrap();
+        let statement: FMPIncomeStatement = serde_json::from_value(json).unwrap();
         assert_eq!(statement.date, "2024-01-01");
         assert_eq!(statement.symbol, "AAPL");
         assert_eq!(statement.revenue, Some(365000000000.0));
