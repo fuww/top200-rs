@@ -43,10 +43,10 @@ enum Commands {
     AddCurrency { code: String, name: String },
     /// List currencies
     ListCurrencies,
-    /// Generate heatmap
-    GenerateHeatmap,
-    /// List top 100
-    ListTop100,
+    // /// Generate heatmap
+    // GenerateHeatmap,
+    // /// List top 100
+    // ListTop100,
 }
 
 #[tokio::main]
@@ -85,119 +85,18 @@ async fn main() -> Result<()> {
                 println!("{}: {}", code, name);
             }
         }
-        Some(Commands::GenerateHeatmap) => {
-            generate_heatmap_from_latest()?;
-        }
-        Some(Commands::ListTop100) => {
-            output_top_100_active()?;
-        }
+        // Some(Commands::GenerateHeatmap) => {
+        //     marketcaps::generate_heatmap_from_latest()?;
+        // }
+        // Some(Commands::ListTop100) => {
+        //     marketcaps::output_top_100_active()?;
+        // }
         None => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
-            let fmp_client = api::FMPClient::new(api_key);
-            exchange_rates::export_exchange_rates_csv(&fmp_client).await?;
+            marketcaps::marketcaps().await?; 
         }
     }
 
     Ok(())
-}
-
-/// Read CSV file and return records with market cap in EUR
-fn read_csv_with_market_cap(file_path: &std::path::Path) -> Result<Vec<(f64, Vec<String>)>> {
-    let mut rdr = csv::Reader::from_path(file_path)?;
-    let mut results = Vec::new();
-
-    for result in rdr.records() {
-        let record = result?;
-        let market_cap_str = record.get(2).unwrap_or("0");
-        let market_cap: f64 = market_cap_str.parse().unwrap_or(0.0);
-        let currency = record.get(3).unwrap_or("EUR");
-
-        // Convert market cap to EUR if necessary
-        let market_cap_eur = if currency == "EUR" {
-            market_cap
-        } else if currency == "USD" {
-            market_cap * 0.85 // Approximate USD to EUR conversion
-        } else {
-            market_cap // Default to original value if currency is unknown
-        };
-
-        results.push((
-            market_cap_eur,
-            record.iter().map(|s| s.to_string()).collect(),
-        ));
-    }
-
-    // Sort by market cap in descending order
-    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-
-    Ok(results)
-}
-
-fn output_top_100_active() -> Result<()> {
-    let latest_file = find_latest_file("output/eu_marketcaps_*.csv")?;
-    let results = read_csv_with_market_cap(&latest_file)?;
-
-    // Filter active companies and take top 100
-    let active_results: Vec<_> = results
-        .iter()
-        .filter(|(_, record)| record[6] == "true") // Active status is at index 6
-        .take(100)
-        .collect();
-
-    println!("Top 100 Active Companies by Market Cap:");
-    println!("Rank\tMarket Cap (EUR)\tTicker\tName");
-    for (i, (market_cap, record)) in active_results.iter().enumerate() {
-        println!(
-            "{}\t{:.2}\t{}\t{}",
-            i + 1,
-            market_cap,
-            record[0], // Ticker
-            record[1]  // Name
-        );
-    }
-
-    Ok(())
-}
-
-fn generate_heatmap_from_latest() -> Result<()> {
-    let latest_file = find_latest_file("output/eu_marketcaps_*.csv")?;
-    let results = read_csv_with_market_cap(&latest_file)?;
-
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let output_path = format!("output/heatmap_{}.html", timestamp);
-
-    generate_market_heatmap(&results, &output_path)?;
-    println!("✅ Heatmap generated at: {}", output_path);
-
-    Ok(())
-}
-
-fn generate_market_heatmap(results: &[(f64, Vec<String>)], output_path: &str) -> Result<()> {
-    let stocks: Vec<viz::StockData> = results
-        .iter()
-        .map(|(market_cap, record)| viz::StockData {
-            symbol: record[0].clone(), // Ticker is at index 0
-            market_cap_eur: *market_cap,
-            employees: record[11].clone(), // Employees is at index 11
-        })
-        .collect();
-
-    viz::create_market_heatmap(stocks, output_path)
-}
-
-fn find_latest_file(pattern: &str) -> Result<std::path::PathBuf> {
-    use glob::glob;
-    let paths: Vec<std::path::PathBuf> = glob(pattern)?.filter_map(|entry| entry.ok()).collect();
-
-    let latest_file = paths
-        .iter()
-        .max_by_key(|path| path.metadata().unwrap().modified().unwrap())
-        .ok_or_else(|| {
-            anyhow::anyhow!("No files matching '{}' found in output directory", pattern)
-        })?;
-
-    Ok(latest_file.to_path_buf())
 }
 
 #[cfg(test)]

@@ -219,19 +219,30 @@ pub async fn marketcaps() -> Result<()> {
     top_100_writer.flush()?;
     println!("✅ Top 100 active tickers written to: {}", top_100_filename);
 
-    // Generate market heatmap from top 100
+    // Generate market heatmap from top 100 CSV
+    generate_heatmap_from_top_100(&timestamp.to_string())?;
+
+    Ok(())
+}
+
+pub fn generate_heatmap_from_top_100(timestamp: &str) -> Result<()> {
+    let top_100_filename = format!("output/top_100_active_{}.csv", timestamp);
+    let mut reader = csv::Reader::from_path(&top_100_filename)?;
+
+    let mut stock_data = Vec::new();
+    for result in reader.records() {
+        let record = result?;
+        if record.len() >= 12 {
+            stock_data.push(crate::viz::StockData {
+                symbol: record[0].to_string(),
+                market_cap_eur: record[4].parse::<f64>().unwrap_or_default(),
+                employees: record[11].to_string(),
+            });
+        }
+    }
+
     let output_path = format!("output/market_heatmap_{}.png", timestamp);
-    crate::viz::create_market_heatmap(
-        top_100_results
-            .iter()
-            .map(|(market_cap, record)| crate::viz::StockData {
-                symbol: record[0].clone(),
-                market_cap_eur: *market_cap,
-                employees: record[11].clone(),
-            })
-            .collect(),
-        &output_path,
-    )?;
+    crate::viz::create_market_heatmap(stock_data, &output_path)?;
     println!("✅ Market heatmap generated at: {}", output_path);
 
     Ok(())
