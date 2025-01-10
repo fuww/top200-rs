@@ -10,7 +10,8 @@ mod db;
 mod details_eu_fmp;
 mod details_us_polygon;
 mod exchange_rates;
-mod marketcaps;
+mod marketcaps_csv;
+mod marketcaps_sql;
 mod models;
 mod utils;
 mod viz;
@@ -33,7 +34,9 @@ enum Commands {
     /// Export EU market caps to CSV
     ExportEu,
     /// Export combined market caps to CSV
-    ExportCombined,
+    MarketCapsCsv,
+    /// Export combined market caps to SQL
+    MarketCapsSql,
     /// List US market caps
     ListUs,
     /// List EU market caps
@@ -61,10 +64,17 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Commands::ExportUs) => details_us_polygon::export_details_us_csv().await?,
         Some(Commands::ExportEu) => details_eu_fmp::export_details_eu_csv().await?,
-        Some(Commands::ExportCombined) => {
+        Some(Commands::MarketCapsCsv) => {
             // details_us_polygon::export_details_us_csv().await?;
             // details_eu_fmp::export_details_eu_csv().await?;
-            marketcaps::marketcaps().await?;
+            // marketcaps::marketcaps().await?;
+            marketcaps_csv::marketcaps().await?;
+        }
+        Some(Commands::MarketCapsSql) => {
+            // details_us_polygon::export_details_us_csv().await?;
+            // details_eu_fmp::export_details_eu_csv().await?;
+            // marketcaps::marketcaps().await?;
+            marketcaps_sql::marketcaps().await?;
         }
         Some(Commands::ListUs) => details_us_polygon::list_details_us().await?,
         Some(Commands::ListEu) => details_eu_fmp::list_details_eu().await?,
@@ -102,7 +112,7 @@ async fn main() -> Result<()> {
         //     marketcaps::output_top_100_active()?;
         // }
         None => {
-            marketcaps::marketcaps().await?;
+            marketcaps_sql::marketcaps().await?;
         }
     }
 
