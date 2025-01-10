@@ -13,6 +13,7 @@ mod exchange_rates;
 mod marketcaps_csv;
 mod marketcaps_sql;
 mod models;
+mod top100;
 mod utils;
 mod viz;
 
@@ -49,10 +50,12 @@ enum Commands {
     ListCurrencies,
     /// Generate bar chart of top 100 companies
     GenerateBarChart,
-    // /// Generate heatmap
-    // GenerateHeatmap,
-    // /// List top 100
-    // ListTop100,
+    /// Export top 100 companies by market cap to CSV
+    Top100 {
+        /// Path to output CSV file
+        #[clap(short, long)]
+        output: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -105,12 +108,13 @@ async fn main() -> Result<()> {
             }
             generate_bar_chart_handler().await?;
         }
-        // Some(Commands::GenerateHeatmap) => {
-        //     marketcaps::generate_heatmap_from_latest()?;
-        // }
-        // Some(Commands::ListTop100) => {
-        //     marketcaps::output_top_100_active()?;
-        // }
+        Some(Commands::Top100 { output }) => {
+            let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:data.db".to_string());
+            let pool = db::create_db_pool(&db_url).await?;
+            let companies = top100::get_top_100(&pool).await?;
+            let filename = top100::write_to_csv(&companies, output)?;
+            println!("Exported top 100 companies to: {}", filename);
+        }
         None => {
             marketcaps_sql::marketcaps().await?;
         }
