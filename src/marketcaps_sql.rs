@@ -134,6 +134,16 @@ mod tests {
     use super::*;
     use crate::db;
     use sqlx::Row;
+    use std::collections::HashMap;
+
+    fn setup_test_rates() -> HashMap<String, f64> {
+        let mut rate_map = HashMap::new();
+        // Add exchange rates (EUR is base currency)
+        rate_map.insert("EUR/USD".to_string(), 1.1); // 1 EUR = 1.1 USD
+        rate_map.insert("EUR/GBP".to_string(), 0.85); // 1 EUR = 0.85 GBP
+        rate_map.insert("EUR/JPY".to_string(), 160.0); // 1 EUR = 160 JPY
+        rate_map
+    }
 
     #[tokio::test]
     async fn test_marketcaps_db() -> Result<()> {
@@ -196,6 +206,81 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].get::<String, _>("ticker"), test_ticker);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_currency_conversions() -> Result<()> {
+        // Set up test database
+        let db_url = "sqlite::memory:";
+        let pool = db::create_db_pool(db_url).await?;
+        let rate_map = setup_test_rates();
+
+        // Test cases with different original currencies
+        let test_cases = vec![
+            // USD company (e.g. Apple)
+            ("AAPL", 110.0, "USD", 100.0, 110.0), // 110 USD = 100 EUR (using 1.1 rate)
+            // GBP company (e.g. Shell)
+            ("SHEL", 85.0, "GBP", 100.0, 110.0), // 85 GBP = 100 EUR (using 0.85 rate)
+            // JPY company (e.g. Toyota)
+            ("TM", 16000.0, "JPY", 100.0, 110.0), // 16000 JPY = 100 EUR (using 160.0 rate)
+        ];
+
+        for (ticker, orig_cap, orig_curr, expected_eur, expected_usd) in test_cases {
+            let name = format!("Test Company {}", ticker);
+            sqlx::query!(
+                r#"
+                INSERT INTO market_caps (
+                    ticker, name, market_cap_original, original_currency,
+                    market_cap_eur, market_cap_usd, active, timestamp
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                "#,
+                ticker,
+                name,
+                orig_cap,
+                orig_curr,
+                expected_eur,
+                expected_usd,
+                true,
+                "2025-01-10 15:19:20",
+            )
+            .execute(&pool)
+            .await?;
+
+            // Verify conversions
+            let row = sqlx::query("SELECT * FROM market_caps WHERE ticker = ?")
+                .bind(ticker)
+                .fetch_one(&pool)
+                .await?;
+
+            let stored_orig = row.get::<f64, _>("market_cap_original");
+            let stored_curr = row.get::<String, _>("original_currency");
+            let stored_eur = row.get::<f64, _>("market_cap_eur");
+            let stored_usd = row.get::<f64, _>("market_cap_usd");
+
+            // Test original values are stored correctly
+            assert_eq!(stored_orig, orig_cap, "Original market cap mismatch for {}", ticker);
+            assert_eq!(stored_curr, orig_curr, "Original currency mismatch for {}", ticker);
+
+            // Test EUR conversion
+            let calc_eur = match orig_curr {
+                "USD" => orig_cap / rate_map["EUR/USD"],
+                "GBP" => orig_cap / rate_map["EUR/GBP"],
+                "JPY" => orig_cap / rate_map["EUR/JPY"],
+                _ => panic!("Unsupported currency: {}", orig_curr),
+            };
+            assert!((stored_eur - calc_eur).abs() < 0.01, 
+                "EUR conversion failed for {}. Expected ~{}, got {}", 
+                ticker, calc_eur, stored_eur);
+
+            // Test USD conversion
+            let calc_usd = stored_eur * rate_map["EUR/USD"];
+            assert!((stored_usd - calc_usd).abs() < 0.01,
+                "USD conversion failed for {}. Expected ~{}, got {}",
+                ticker, calc_usd, stored_usd);
+        }
 
         Ok(())
     }
