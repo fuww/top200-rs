@@ -8,13 +8,13 @@ CREATE TABLE IF NOT EXISTS currencies (
 
 -- Create forex_rates table
 CREATE TABLE IF NOT EXISTS forex_rates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
     symbol TEXT NOT NULL,
     bid REAL NOT NULL,
     ask REAL NOT NULL,
     timestamp TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (symbol, timestamp)
 );
 
 -- Create market_caps table
