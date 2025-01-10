@@ -14,7 +14,7 @@ pub async fn export_exchange_rates_csv(fmp_client: &FMPClient) -> Result<()> {
     let mut writer = csv::Writer::from_writer(file);
 
     // Create database connection pool
-    let db_url = "sqlite:top200.db";
+    let db_url = "sqlite:data.db";
     let pool = db::create_db_pool(db_url).await?;
 
     // Write headers

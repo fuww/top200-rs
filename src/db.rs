@@ -5,16 +5,22 @@
 use crate::api::ExchangeRate;
 use crate::currencies;
 use anyhow::Result;
-use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
+use sqlx::{migrate::MigrateDatabase, sqlite::{SqliteConnectOptions, SqlitePool}, Pool};
 
 pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
-    // Create database if it doesn't exist
-    if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
-        Sqlite::create_database(db_url).await?;
+    let db_path = db_url.trim_start_matches("sqlite:");
+    
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = std::path::Path::new(db_path).parent() {
+        std::fs::create_dir_all(parent)?;
     }
+    
+    let options = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(true)
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
 
-    // Connect to the database
-    let pool = SqlitePool::connect(db_url).await?;
+    let pool = Pool::connect_with(options).await?;
 
     // Run migrations
     sqlx::migrate!().run(&pool).await?;
