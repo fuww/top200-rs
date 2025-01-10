@@ -128,3 +128,75 @@ pub async fn marketcaps() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db;
+    use sqlx::Row;
+
+    #[tokio::test]
+    async fn test_marketcaps_db() -> Result<()> {
+        // Set up test database
+        let db_url = "sqlite::memory:";
+        let pool = db::create_db_pool(db_url).await?;
+
+        // Insert test data
+        let test_ticker = "AAPL";
+        sqlx::query!(
+            r#"
+            INSERT INTO market_caps (
+                ticker, name, market_cap_original, original_currency,
+                market_cap_eur, market_cap_usd, active, description,
+                homepage_url, employees, revenue, revenue_usd,
+                working_capital_ratio, quick_ratio, eps, pe_ratio,
+                de_ratio, roe, timestamp
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+            test_ticker,
+            "Apple Inc.",
+            3000000000000.0,
+            "USD",
+            2500000000000.0,
+            3000000000000.0,
+            true,
+            "Technology company",
+            "https://www.apple.com",
+            150000,
+            400000000000.0,
+            400000000000.0,
+            1.5,
+            1.2,
+            6.5,
+            25.0,
+            1.8,
+            0.45,
+            "2025-01-10 14:26:30",
+        )
+        .execute(&pool)
+        .await?;
+
+        // Query and verify data
+        let row = sqlx::query("SELECT * FROM market_caps WHERE ticker = ?")
+            .bind(test_ticker)
+            .fetch_one(&pool)
+            .await?;
+
+        assert_eq!(row.get::<String, _>("ticker"), test_ticker);
+        assert_eq!(row.get::<String, _>("name"), "Apple Inc.");
+        assert_eq!(row.get::<f64, _>("market_cap_eur"), 2500000000000.0);
+        assert_eq!(row.get::<f64, _>("market_cap_usd"), 3000000000000.0);
+        assert_eq!(row.get::<bool, _>("active"), true);
+
+        // Test ordering by market cap
+        let rows = sqlx::query("SELECT ticker, market_cap_eur FROM market_caps ORDER BY market_cap_eur DESC LIMIT 1")
+            .fetch_all(&pool)
+            .await?;
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get::<String, _>("ticker"), test_ticker);
+
+        Ok(())
+    }
+}
