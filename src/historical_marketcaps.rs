@@ -6,7 +6,7 @@ use crate::api;
 use crate::config;
 use crate::currencies::{convert_currency, get_rate_map_from_db};
 use anyhow::Result;
-use chrono::{DateTime, NaiveDateTime, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
