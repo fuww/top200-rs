@@ -34,6 +34,16 @@ sqlx migrate run
 sqlx migrate add init
 ```
 
+```sh
+$ sqlite3 top200.db < tests/market_caps_totals_per_year.sql
+
+# Output
+2020|99
+2021|107
+2023|2
+2024|111
+```
+
 ## Calculate market caps history
 
 Many analysts use the last trading day of each year to calculate yearly market cap snapshots. This ensures a consistent reference point and reflects end-of-year valuations. Other methods include averaging across each year or using the first trading day, but the closing price on December 31 (or the final trading session) is most common.

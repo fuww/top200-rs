@@ -6,7 +6,7 @@ use crate::api;
 use crate::config;
 use crate::currencies::{convert_currency, get_rate_map_from_db};
 use anyhow::Result;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, NaiveDate, NaiveTime, Utc};
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
@@ -30,12 +30,12 @@ pub async fn fetch_historical_marketcaps(
 
     for year in start_year..=end_year {
         // Get Dec 31st of each year
-        let timestamp = format!("{}-12-31 23:59:59", year);
-        let naive_dt = NaiveDateTime::parse_from_str(&timestamp, "%Y-%m-%d %H:%M:%S")?;
-        let datetime_utc = DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc);
-
-        // Get exchange rates for that date
-        println!("Fetching exchange rates for {}", timestamp);
+        let naive_dt = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(year, 12, 31).unwrap(),
+            NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
+        );
+        let datetime_utc = naive_dt.and_utc();
+        println!("Fetching exchange rates for {}", naive_dt);
         let rate_map = get_rate_map_from_db(pool).await?;
 
         for ticker in &tickers {
@@ -59,7 +59,8 @@ pub async fn fetch_historical_marketcaps(
                         &rate_map,
                     );
 
-                    let timestamp_unix = naive_dt.and_utc().timestamp();
+                    // Store the Unix timestamp of the historical date
+                    let timestamp = naive_dt.timestamp();
 
                     // Insert into database
                     sqlx::query!(
@@ -80,20 +81,20 @@ pub async fn fetch_historical_marketcaps(
                         market_cap.exchange,
                         market_cap.price,
                         true,
-                        timestamp_unix,
+                        timestamp,
                     )
                     .execute(pool)
                     .await?;
 
                     println!(
                         "✅ Added historical market cap for {} on {}",
-                        ticker, timestamp
+                        ticker, naive_dt
                     );
                 }
                 Err(e) => {
                     eprintln!(
                         "❌ Failed to fetch market cap for {} on {}: {}",
-                        ticker, timestamp, e
+                        ticker, naive_dt, e
                     );
                 }
             }
