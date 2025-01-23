@@ -10,6 +10,7 @@ mod db;
 mod details_eu_fmp;
 mod details_us_polygon;
 mod exchange_rates;
+mod historical_marketcaps;
 mod marketcaps;
 mod models;
 mod utils;
@@ -41,6 +42,11 @@ enum Commands {
     ListEu,
     /// Export exchange rates to CSV
     ExportRates,
+    /// Fetch historical market caps
+    FetchHistoricalMarketCaps {
+        start_year: i32,
+        end_year: i32,
+    },
     /// Add a currency
     AddCurrency { code: String, name: String },
     /// List currencies
@@ -77,6 +83,9 @@ async fn main() -> Result<()> {
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             exchange_rates::export_exchange_rates_csv(&fmp_client, &pool).await?;
+        }
+        Some(Commands::FetchHistoricalMarketCaps { start_year, end_year }) => {
+            historical_marketcaps::fetch_historical_marketcaps(&pool, start_year, end_year).await?;
         }
         Some(Commands::AddCurrency { code, name }) => {
             currencies::insert_currency(&pool, &code, &name).await?;

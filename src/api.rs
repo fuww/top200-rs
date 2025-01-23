@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use anyhow::{Context, Result};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{self, Value};
@@ -187,6 +187,49 @@ impl FMPClient {
         Ok(details)
     }
 
+    pub async fn get_historical_market_cap(
+        &self,
+        ticker: &str,
+        date: &DateTime<Utc>,
+    ) -> Result<HistoricalMarketCap> {
+        let url = format!(
+            "https://financialmodelingprep.com/api/v3/historical-market-capitalization/{}?from={}&to={}&apikey={}",
+            ticker,
+            date.format("%Y-%m-%d"),
+            date.format("%Y-%m-%d"),
+            self.api_key
+        );
+
+        let response: Vec<Value> = self.make_request(url).await?;
+        
+        if let Some(data) = response.first() {
+            let market_cap = data["marketCap"].as_f64().unwrap_or(0.0);
+            let price = data["price"].as_f64().unwrap_or(0.0);
+            
+            // Get company profile for additional info
+            let profile_url = format!(
+                "https://financialmodelingprep.com/api/v3/profile/{}?apikey={}",
+                ticker, self.api_key
+            );
+            let profiles: Vec<FMPCompanyProfile> = self.make_request(profile_url).await?;
+            
+            if let Some(profile) = profiles.first() {
+                Ok(HistoricalMarketCap {
+                    ticker: ticker.to_string(),
+                    name: profile.company_name.clone(),
+                    market_cap_original: market_cap,
+                    original_currency: "USD".to_string(), // FMP returns USD by default
+                    exchange: profile.exchange.clone(),
+                    price,
+                })
+            } else {
+                anyhow::bail!("No company profile found for ticker {}", ticker)
+            }
+        } else {
+            anyhow::bail!("No historical market cap data found for ticker {}", ticker)
+        }
+    }
+
     #[allow(dead_code)]
     pub async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {
         if ticker.is_empty() {
@@ -368,6 +411,16 @@ pub struct ExchangeRate {
     #[serde(rename = "previousClose")]
     pub previous_close: Option<f64>,
     pub timestamp: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HistoricalMarketCap {
+    pub ticker: String,
+    pub name: String,
+    pub market_cap_original: f64,
+    pub original_currency: String,
+    pub exchange: String,
+    pub price: f64,
 }
 
 #[cfg(test)]
