@@ -23,7 +23,10 @@ pub async fn fetch_historical_marketcaps(
         .expect("FINANCIALMODELINGPREP_API_KEY must be set");
     let fmp_client = Arc::new(api::FMPClient::new(api_key));
 
-    println!("Fetching historical market caps from {} to {}", start_year, end_year);
+    println!(
+        "Fetching historical market caps from {} to {}",
+        start_year, end_year
+    );
 
     for year in start_year..=end_year {
         // Get Dec 31st of each year
@@ -36,7 +39,10 @@ pub async fn fetch_historical_marketcaps(
         let rate_map = get_rate_map_from_db(pool).await?;
 
         for ticker in &tickers {
-            match fmp_client.get_historical_market_cap(ticker, &datetime_utc).await {
+            match fmp_client
+                .get_historical_market_cap(ticker, &datetime_utc)
+                .await
+            {
                 Ok(market_cap) => {
                     // Convert currencies if needed
                     let market_cap_eur = convert_currency(
@@ -79,10 +85,16 @@ pub async fn fetch_historical_marketcaps(
                     .execute(pool)
                     .await?;
 
-                    println!("✅ Added historical market cap for {} on {}", ticker, timestamp);
+                    println!(
+                        "✅ Added historical market cap for {} on {}",
+                        ticker, timestamp
+                    );
                 }
                 Err(e) => {
-                    eprintln!("❌ Failed to fetch market cap for {} on {}: {}", ticker, timestamp, e);
+                    eprintln!(
+                        "❌ Failed to fetch market cap for {} on {}: {}",
+                        ticker, timestamp, e
+                    );
                 }
             }
         }

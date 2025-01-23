@@ -201,18 +201,18 @@ impl FMPClient {
         );
 
         let response: Vec<Value> = self.make_request(url).await?;
-        
+
         if let Some(data) = response.first() {
             let market_cap = data["marketCap"].as_f64().unwrap_or(0.0);
             let price = data["price"].as_f64().unwrap_or(0.0);
-            
+
             // Get company profile for additional info
             let profile_url = format!(
                 "https://financialmodelingprep.com/api/v3/profile/{}?apikey={}",
                 ticker, self.api_key
             );
             let profiles: Vec<FMPCompanyProfile> = self.make_request(profile_url).await?;
-            
+
             if let Some(profile) = profiles.first() {
                 Ok(HistoricalMarketCap {
                     ticker: ticker.to_string(),
