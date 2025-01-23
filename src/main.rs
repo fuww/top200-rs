@@ -3,57 +3,35 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 mod api;
-mod bar_chart;
 mod config;
 mod currencies;
 mod db;
-mod details_eu_fmp;
-mod details_us_polygon;
-mod exchange_rates;
 mod historical_marketcaps;
-mod marketcaps;
+mod marketcaps_csv_writer;
 mod models;
-mod utils;
-mod viz;
 
 use anyhow::Result;
+use chrono::Datelike;
 use clap::{Parser, Subcommand};
-use sqlx::sqlite::SqlitePool;
+use sqlx::sqlite::SqlitePoolOptions;
 use std::env;
 
-#[derive(Debug, Parser)]
+#[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Subcommand)]
 enum Commands {
-    /// Export US market caps to CSV
-    ExportUs,
-    /// Export EU market caps to CSV
-    ExportEu,
-    /// Export combined market caps to CSV
-    ExportCombined,
-    /// List US market caps
-    ListUs,
-    /// List EU market caps
-    ListEu,
-    /// Export exchange rates to CSV
-    ExportRates,
-    /// Fetch historical market caps
-    FetchHistoricalMarketCaps { start_year: i32, end_year: i32 },
-    /// Add a currency
-    AddCurrency { code: String, name: String },
-    /// List currencies
-    ListCurrencies,
-    /// Generate bar chart of top 100 companies
-    GenerateBarChart,
-    // /// Generate heatmap
-    // GenerateHeatmap,
-    // /// List top 100
-    // ListTop100,
+    /// Fetch historical market cap data for all tickers
+    FetchHistoricalMarketCaps {
+        /// Start year (inclusive)
+        start_year: i32,
+        /// End year (inclusive)
+        end_year: i32,
+    },
 }
 
 #[tokio::main]
@@ -62,63 +40,33 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:data.db".to_string());
-    let pool = db::create_db_pool(&db_url).await?;
+    // Create SQLite connection pool
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:top200.db".to_string());
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&db_url)
+        .await?;
 
-    match cli.command {
-        Some(Commands::ExportUs) => details_us_polygon::export_details_us_csv(&pool).await?,
-        Some(Commands::ExportEu) => details_eu_fmp::export_details_eu_csv(&pool).await?,
-        Some(Commands::ExportCombined) => {
-            // details_us_polygon::export_details_us_csv(&pool).await?;
-            // details_eu_fmp::export_details_eu_csv(&pool).await?;
-            marketcaps::marketcaps(&pool).await?;
-        }
-        Some(Commands::ListUs) => details_us_polygon::list_details_us(&pool).await?,
-        Some(Commands::ListEu) => details_eu_fmp::list_details_eu(&pool).await?,
-        Some(Commands::ExportRates) => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
-            let fmp_client = api::FMPClient::new(api_key);
-            exchange_rates::export_exchange_rates_csv(&fmp_client, &pool).await?;
-        }
+    match &cli.command {
         Some(Commands::FetchHistoricalMarketCaps {
             start_year,
             end_year,
         }) => {
-            historical_marketcaps::fetch_historical_marketcaps(&pool, start_year, end_year).await?;
+            historical_marketcaps::fetch_historical_market_caps(&pool, *start_year, *end_year)
+                .await?;
         }
-        Some(Commands::AddCurrency { code, name }) => {
-            currencies::insert_currency(&pool, &code, &name).await?;
-            println!("Added currency: {} ({})", name, code);
-        }
-        Some(Commands::ListCurrencies) => {
-            let currencies = currencies::list_currencies(&pool).await?;
-            for (code, name) in currencies {
-                println!("{}: {}", code, name);
-            }
-        }
-        Some(Commands::GenerateBarChart) => {
-            async fn generate_bar_chart_handler(pool: &SqlitePool) -> Result<()> {
-                bar_chart::generate_bar_chart(pool).await?;
-                Ok(())
-            }
-            generate_bar_chart_handler(&pool).await?;
-        }
-        // Some(Commands::GenerateHeatmap) => {
-        //     marketcaps::generate_heatmap_from_latest()?;
-        // }
-        // Some(Commands::ListTop100) => {
-        //     marketcaps::output_top_100_active()?;
-        // }
         None => {
-            marketcaps::marketcaps(&pool).await?;
+            // Get the current year
+            let current_year = chrono::Local::now().year();
+            
+            // Fetch historical market caps for the current year
+            historical_marketcaps::fetch_historical_market_caps(&pool, current_year, current_year)
+                .await?;
+
+            // Generate reports
+            marketcaps_csv_writer::generate_reports(&pool).await?;
         }
     }
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }

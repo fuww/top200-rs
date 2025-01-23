@@ -2,63 +2,53 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use crate::api::ExchangeRate;
-use crate::currencies;
 use anyhow::Result;
-use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::SqlitePool;
+use std::path::Path;
+use std::str::FromStr;
 
 pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
-    // Create database if it doesn't exist
-    if !Sqlite::database_exists(db_url).await.unwrap_or(false) {
-        Sqlite::create_database(db_url).await?;
+    // If the URL is a file path (not :memory:), ensure the directory exists
+    if !db_url.contains(":memory:") {
+        if let Some(path) = db_url.strip_prefix("sqlite:") {
+            if let Some(parent) = Path::new(path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            // Touch the file to create it
+            std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(path)?;
+        }
     }
 
-    // Connect to the database
-    let pool = SqlitePool::connect(db_url).await?;
+    // Use SqliteConnectOptions to create the database if it doesn't exist
+    let options = SqliteConnectOptions::from_str(db_url)?
+        .create_if_missing(true);
 
-    // Run migrations
-    sqlx::migrate!().run(&pool).await?;
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect_with(options)
+        .await?;
 
     Ok(pool)
 }
 
-pub async fn store_forex_rates(pool: &SqlitePool, rates: &[ExchangeRate]) -> Result<()> {
-    for rate in rates {
-        // Skip if we don't have the required fields
-        let (Some(name), Some(bid), Some(ask)) = (
-            rate.name.as_ref(),
-            rate.previous_close, // Using previous_close as bid
-            rate.price,          // Using current price as ask
-        ) else {
-            continue;
-        };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
 
-        // Store the forex rate
-        sqlx::query!(
-            r#"
-            INSERT INTO forex_rates (symbol, bid, ask, timestamp)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(symbol, timestamp) DO UPDATE SET
-                bid = excluded.bid,
-                ask = excluded.ask
-            "#,
-            name,
-            bid,
-            ask,
-            rate.timestamp
-        )
-        .execute(pool)
-        .await?;
+    #[tokio::test]
+    async fn test_create_db_pool() -> Result<()> {
+        let dir = tempdir()?;
+        let db_path = dir.path().join("test.db");
+        let db_url = format!("sqlite:{}", db_path.to_str().unwrap());
 
-        // Extract and store the currencies
-        if let Some(pair) = name.split_once('/') {
-            let (base, quote) = pair;
-            // Store base currency
-            currencies::insert_currency(pool, base, &format!("{} Currency", base)).await?;
-            // Store quote currency
-            currencies::insert_currency(pool, quote, &format!("{} Currency", quote)).await?;
-        }
+        let pool = create_db_pool(&db_url).await?;
+        assert!(pool.acquire().await.is_ok());
+
+        Ok(())
     }
-
-    Ok(())
 }

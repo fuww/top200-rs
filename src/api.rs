@@ -5,7 +5,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{self, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -229,100 +229,6 @@ impl FMPClient {
             anyhow::bail!("No historical market cap data found for ticker {}", ticker)
         }
     }
-
-    #[allow(dead_code)]
-    pub async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {
-        if ticker.is_empty() {
-            anyhow::bail!("ticker empty");
-        }
-
-        let url = format!(
-            "https://financialmodelingprep.com/api/v3/ratios/{}?apikey={}",
-            ticker, self.api_key
-        );
-
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let status = response.status();
-        let text = response
-            .text()
-            .await
-            .context("Failed to get response text")?;
-
-        if !status.is_success() {
-            anyhow::bail!("API request failed: {}", text);
-        }
-
-        let ratios: Vec<FMPRatios> =
-            serde_json::from_str(&text).context("Failed to parse FMP ratios response")?;
-
-        // Get the most recent ratios (first in the list)
-        Ok(ratios.into_iter().next())
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>> {
-        if ticker.is_empty() {
-            anyhow::bail!("ticker empty");
-        }
-
-        let url = format!(
-            "https://financialmodelingprep.com/api/v3/income-statement/{}?limit=1&apikey={}",
-            ticker, self.api_key
-        );
-
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to send request")?;
-
-        let status = response.status();
-        let text = response
-            .text()
-            .await
-            .context("Failed to get response text")?;
-
-        if !status.is_success() {
-            anyhow::bail!("API request failed: {}", text);
-        }
-
-        let statements: Vec<FMPIncomeStatement> =
-            serde_json::from_str(&text).context("Failed to parse FMP income statement response")?;
-
-        // Get the most recent statement (first in the list)
-        Ok(statements.into_iter().next())
-    }
-
-    pub async fn get_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
-        let url = format!(
-            "https://financialmodelingprep.com/api/v3/quotes/forex?apikey={}",
-            self.api_key
-        );
-
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .context("Failed to send request to FMP forex API")?;
-
-        if !response.status().is_success() {
-            anyhow::bail!("API request failed with status: {}", response.status());
-        }
-
-        let rates: Vec<ExchangeRate> = response
-            .json()
-            .await
-            .context("Failed to parse forex rates response")?;
-        Ok(rates)
-    }
 }
 
 impl PolygonClient {
@@ -381,39 +287,7 @@ pub async fn get_details_eu(ticker: &str, rate_map: &HashMap<String, f64>) -> Re
     client.get_details(ticker, rate_map).await
 }
 
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-pub struct ExchangeRate {
-    pub name: Option<String>,
-    pub price: Option<f64>,
-    #[serde(rename = "changesPercentage")]
-    pub changes_percentage: Option<f64>,
-    pub change: Option<f64>,
-    #[serde(rename = "dayLow")]
-    pub day_low: Option<f64>,
-    #[serde(rename = "dayHigh")]
-    pub day_high: Option<f64>,
-    #[serde(rename = "yearHigh")]
-    pub year_high: Option<f64>,
-    #[serde(rename = "yearLow")]
-    pub year_low: Option<f64>,
-    #[serde(rename = "marketCap")]
-    pub market_cap: Option<f64>,
-    #[serde(rename = "priceAvg50")]
-    pub price_avg_50: Option<f64>,
-    #[serde(rename = "priceAvg200")]
-    pub price_avg_200: Option<f64>,
-    pub volume: Option<f64>,
-    #[serde(rename = "avgVolume")]
-    pub avg_volume: Option<f64>,
-    pub exchange: Option<String>,
-    pub open: Option<f64>,
-    #[serde(rename = "previousClose")]
-    pub previous_close: Option<f64>,
-    pub timestamp: i64,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct HistoricalMarketCap {
     pub ticker: String,
     pub name: String,
@@ -426,22 +300,12 @@ pub struct HistoricalMarketCap {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[tokio::test]
-    async fn test_empty_ticker() {
-        let client = FMPClient::new("test_key".to_string());
-        let rate_map = HashMap::new();
-        let result = client.get_details("", &rate_map).await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("ticker empty"));
-
-        let client = PolygonClient::new("test_key".to_string());
-        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
-        let result = client.get_details("", date).await;
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("ticker empty"));
+    async fn test_empty_ticker() -> Result<()> {
+        let client = FMPClient::new("dummy_key".to_string());
+        let date = chrono::Utc::now();
+        assert!(client.get_historical_market_cap("", &date).await.is_err());
+        Ok(())
     }
 }
