@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS market_caps (
-    ticker TEXT PRIMARY KEY,
+    ticker TEXT NOT NULL,
     name TEXT NOT NULL,
     market_cap_original DECIMAL,
     original_currency TEXT,
@@ -21,5 +21,6 @@ CREATE TABLE IF NOT EXISTS market_caps (
     roe DECIMAL,
     timestamp DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ticker, timestamp)
 );
