@@ -23,28 +23,6 @@ Maintain the following structure in the README.md file:
   8. Contributing section
   9. License section
 
-// Organization of rules
-Organize rules into two main directories:
-
-  1. global_rules/
-     - language/
-     - commit-message/
-     - code-style/
-     - documentation/
-     - security/
-     - performance/
-  2. workspace_rules/
-     - Frontend Frameworks and Libraries
-     - Backend and Full-Stack
-     - Mobile Development
-     - CSS and Styling
-     - State Management
-     - Database and API
-     - Testing
-     - Build Tools and Development
-     - Language-Specific
-     - Other
-
 - Main Documentation: [README.md](README.md) - Core vision, implementation details, and setup instructions
 - Data Collection: Daily automated collection of market cap data for fashion/retail companies
 - Market Analysis: Support for US, EU, and combined market analysis

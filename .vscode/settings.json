@@ -15,5 +15,14 @@
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.formatOnSave": true
-    }
+    },
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "database": "${workspaceFolder:top200-rs}/top200.db",
+            "name": "top200"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
 }
