@@ -12,12 +12,11 @@ use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
 /// Store market cap data in the database
-async fn store_market_cap(pool: &SqlitePool, details: &models::Details, rate_map: &std::collections::HashMap<String, f64>) -> Result<()> {
+async fn store_market_cap(pool: &SqlitePool, details: &models::Details, rate_map: &std::collections::HashMap<String, f64>, timestamp: i64) -> Result<()> {
     let original_market_cap = details.market_cap.unwrap_or(0.0) as i64;
     let currency = details.currency_symbol.clone().unwrap_or_default();
     let eur_market_cap = convert_currency(original_market_cap as f64, &currency, "EUR", rate_map) as i64;
     let usd_market_cap = convert_currency(original_market_cap as f64, &currency, "USD", rate_map) as i64;
-    let timestamp = Local::now().naive_utc().and_utc().timestamp();
     let name = details.name.as_ref().unwrap_or(&String::new()).to_string();
     let currency_name = details.currency_name.as_ref().unwrap_or(&String::new()).to_string();
     let active = details.active.unwrap_or(true);
@@ -95,7 +94,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
                     r.market_cap_eur.unwrap_or(0).to_string(),
                     r.market_cap_usd.unwrap_or(0).to_string(),
                     r.exchange.unwrap_or_default(),
-                    r.active.unwrap_or(true).to_string(),
+                    if r.active.unwrap_or(true) { "true".to_string() } else { "false".to_string() },
                     r.description.unwrap_or_default(),
                     r.homepage_url.unwrap_or_default(),
                     r.employees.map(|e| e.to_string()).unwrap_or_default(),
@@ -127,6 +126,9 @@ async fn update_market_caps(pool: &SqlitePool) -> Result<()> {
     let rate_map = Arc::new(rate_map);
     let total_tickers = tickers.len();
 
+    // Use a single timestamp for all records
+    let timestamp = Local::now().naive_utc().and_utc().timestamp();
+
     // Process tickers with progress tracking
     let progress = ProgressBar::new(total_tickers as u64);
     progress.set_style(
@@ -145,7 +147,7 @@ async fn update_market_caps(pool: &SqlitePool) -> Result<()> {
 
         match fmp_client.get_details(ticker, &rate_map).await {
             Ok(details) => {
-                if let Err(e) = store_market_cap(pool, &details, &rate_map).await {
+                if let Err(e) = store_market_cap(pool, &details, &rate_map, timestamp).await {
                     eprintln!("Failed to store market cap for {}: {}", ticker, e);
                     failed_tickers.push((ticker, format!("Failed to store market cap: {}", e)));
                 }
@@ -224,10 +226,10 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     // Sort by EUR market cap
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Filter for active companies and take top 100
+    // Filter for active companies first, then take top 100
     let active_results: Vec<_> = results
         .iter()
-        .filter(|(_, record)| record[7] == "true") // Active column
+        .filter(|(_, record)| record[8] == "true") // Active column
         .take(100)
         .collect();
 

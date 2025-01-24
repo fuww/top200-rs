@@ -49,7 +49,7 @@ Maintain the following structure in the README.md file:
 3. Main Implementation Directories:
    - `/src`: Core Rust implementation
    - `/migrations`: Database schema and updates
-   - `/data`: Market data storage (SQLite)
+   - `/top200.db`: Market data storage (SQLite)
    - `/output`: Generated reports and analysis
 
 Based on the project structure and recent updates, here are suggested areas to focus on:
