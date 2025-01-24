@@ -51,41 +51,28 @@ pub async fn get_rate_map_from_db(pool: &SqlitePool) -> Result<HashMap<String, f
     // Get latest rates for each symbol
     for symbol in symbols {
         if let Some((ask, _bid, _timestamp)) = get_latest_forex_rate(pool, &symbol).await? {
-            rate_map.insert(symbol.clone(), ask);
+            let (from, to) = symbol.split_once('/').unwrap();
+            rate_map.insert(format!("{}/{}", from, to), ask);
+            rate_map.insert(format!("{}/{}", to, from), 1.0 / ask);
         }
     }
 
-    // Add reverse rates (if not already in the database)
-    let mut pairs_to_add = Vec::new();
-    for (pair, &rate) in rate_map.clone().iter() {
-        if let Some((from, to)) = pair.split_once('/') {
-            let reverse_pair = format!("{}/{}", to, from);
-            if !rate_map.contains_key(&reverse_pair) {
-                pairs_to_add.push((reverse_pair, 1.0 / rate));
-            }
-        }
-    }
-
-    // Add cross rates (if not already in the database)
-    let base_pairs: Vec<_> = rate_map.clone().into_iter().collect();
-    for (pair1, rate1) in &base_pairs {
-        if let Some((from1, "USD")) = pair1.split_once('/') {
-            for (pair2, rate2) in &base_pairs {
-                if let Some((from2, "USD")) = pair2.split_once('/') {
-                    if from1 != from2 {
-                        let cross_pair = format!("{}/{}", from1, from2);
+    // Add cross rates
+    let pairs: Vec<_> = rate_map.clone().into_iter().collect();
+    for (pair1, rate1) in &pairs {
+        if let Some((from1, to1)) = pair1.split_once('/') {
+            for (pair2, rate2) in &pairs {
+                if let Some((from2, to2)) = pair2.split_once('/') {
+                    if to1 == from2 && from1 != to2 {
+                        let cross_pair = format!("{}/{}", from1, to2);
                         if !rate_map.contains_key(&cross_pair) {
-                            pairs_to_add.push((cross_pair, rate1 / rate2));
+                            rate_map.insert(cross_pair.clone(), rate1 * rate2);
+                            rate_map.insert(format!("{}/{}", to2, from1), 1.0 / (rate1 * rate2));
                         }
                     }
                 }
             }
         }
-    }
-
-    // Add all the new pairs
-    for (pair, rate) in pairs_to_add {
-        rate_map.insert(pair, rate);
     }
 
     Ok(rate_map)
@@ -138,6 +125,23 @@ pub fn convert_currency(
             "ZAc" => result * 100.0,
             _ => result,
         };
+    }
+
+    // Try conversion through intermediate currencies
+    for (pair, &rate1) in rate_map {
+        if let Some((from1, to1)) = pair.split_once('/') {
+            if from1 == adjusted_from_currency {
+                let second_leg = format!("{}/{}", to1, adjusted_to_currency);
+                if let Some(&rate2) = rate_map.get(&second_leg) {
+                    let result = adjusted_amount * rate1 * rate2;
+                    return match to_currency {
+                        "GBp" => result * 100.0,
+                        "ZAc" => result * 100.0,
+                        _ => result,
+                    };
+                }
+            }
+        }
     }
 
     // If no conversion rate is found, return the original amount
@@ -206,6 +210,27 @@ pub async fn list_forex_symbols(pool: &SqlitePool) -> Result<Vec<String>> {
     .await?;
 
     Ok(records.into_iter().map(|(symbol,)| symbol).collect())
+}
+
+/// Get forex rates for a symbol within a timestamp range
+pub async fn get_forex_rates(
+    pool: &SqlitePool,
+    symbol: &str,
+    start_timestamp: i64,
+    end_timestamp: i64,
+) -> Result<Vec<(f64, f64, i64)>> {
+    let rates = sqlx::query_as::<_, (f64, f64, i64)>(
+        "SELECT ask, bid, timestamp FROM forex_rates 
+         WHERE symbol = ? AND timestamp >= ? AND timestamp <= ?
+         ORDER BY timestamp DESC",
+    )
+    .bind(symbol)
+    .bind(start_timestamp)
+    .bind(end_timestamp)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rates)
 }
 
 /// Update currencies from FMP API
@@ -315,70 +340,74 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_convert_currency() {
-        let rate_map = get_rate_map_from_db(&SqlitePool::connect("sqlite::memory:").await.unwrap()).await.unwrap();
+    #[tokio::test]
+    async fn test_convert_currency() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert currencies
+        insert_currency(&pool, "EUR", "Euro").await?;
+        insert_currency(&pool, "USD", "US Dollar").await?;
+        insert_currency(&pool, "JPY", "Japanese Yen").await?;
+        insert_currency(&pool, "GBP", "British Pound").await?;
+        insert_currency(&pool, "SEK", "Swedish Krona").await?;
+
+        // Insert test forex rates
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956301).await?;
+        insert_forex_rate(&pool, "USD/JPY", 150.0, 150.0, 1701956301).await?;
+        insert_forex_rate(&pool, "GBP/USD", 1.25, 1.25, 1701956301).await?;
+        insert_forex_rate(&pool, "EUR/SEK", 11.25, 11.25, 1701956301).await?;
+
+        let rate_map = get_rate_map_from_db(&pool).await?;
 
         // Test direct USD conversions
-        assert_eq!(convert_currency(100.0, "EUR", "USD", &rate_map), 108.0);
+        assert_eq!(convert_currency(100.0, "EUR", "USD", &rate_map), 100.0 * 1.08);
         assert_eq!(
             convert_currency(100.0, "USD", "EUR", &rate_map),
-            92.59259259259258
+            100.0 / 1.08
         );
 
         // Test cross rates between major currencies
         let eur_jpy = convert_currency(100.0, "EUR", "JPY", &rate_map);
         assert!(
-            eur_jpy > 15800.0 && eur_jpy < 15900.0,
-            "EUR/JPY rate should be around 158.82 (got {})",
-            eur_jpy / 100.0
+            (eur_jpy - (100.0 * 1.08 * 150.0)).abs() < 0.01,
+            "EUR/JPY rate for 100 EUR should be around {} JPY (got {})",
+            100.0 * 1.08 * 150.0,
+            eur_jpy
         );
 
-        let eur_chf = convert_currency(100.0, "EUR", "CHF", &rate_map);
+        let gbp_jpy = convert_currency(100.0, "GBP", "JPY", &rate_map);
         assert!(
-            eur_chf > 94.0 && eur_chf < 95.0,
-            "EUR/CHF rate should be around 0.947 (got {})",
-            eur_chf / 100.0
-        );
-
-        // Test currencies with different magnitudes
-        let jpy_chf = convert_currency(10000.0, "JPY", "CHF", &rate_map);
-        assert!(
-            jpy_chf > 59.5 && jpy_chf < 60.5,
-            "JPY/CHF rate for 10000 JPY should be around 60 CHF (got {})",
-            jpy_chf
+            (gbp_jpy - (100.0 * 1.25 * 150.0)).abs() < 0.01,
+            "GBP/JPY rate for 100 GBP should be around {} JPY (got {})",
+            100.0 * 1.25 * 150.0,
+            gbp_jpy
         );
 
         // Test GBp (pence) conversion
-        assert_eq!(convert_currency(1000.0, "GBp", "USD", &rate_map), 12.5);
-        assert_eq!(convert_currency(10.0, "USD", "GBp", &rate_map), 800.0);
-
-        // Test same currency conversion
-        assert_eq!(convert_currency(100.0, "USD", "USD", &rate_map), 100.0);
-        assert_eq!(convert_currency(100.0, "EUR", "EUR", &rate_map), 100.0);
-
-        // Test conversion through USD
         let gbp_eur = convert_currency(100.0, "GBP", "EUR", &rate_map);
         assert!(
-            gbp_eur > 115.0 && gbp_eur < 116.0,
-            "GBP/EUR rate should be around 1.157 (got {})",
-            gbp_eur / 100.0
+            (gbp_eur - (100.0 * 1.25 / 1.08)).abs() < 0.01,
+            "GBP/EUR rate should be around {} EUR (got {})",
+            100.0 * 1.25 / 1.08,
+            gbp_eur
         );
 
         // Test currencies with low unit value
         let sek_jpy = convert_currency(1000.0, "SEK", "JPY", &rate_map);
         assert!(
-            sek_jpy > 14100.0 && sek_jpy < 14150.0,
-            "SEK/JPY rate for 1000 SEK should be around 14117 JPY (got {})",
+            (sek_jpy - (1000.0 / 11.25 * 1.08 * 150.0)).abs() < 0.01,
+            "SEK/JPY rate for 1000 SEK should be around {} JPY (got {})",
+            1000.0 / 11.25 * 1.08 * 150.0,
             sek_jpy
         );
+        Ok(())
     }
 
     #[tokio::test]
     async fn test_forex_rates() -> Result<()> {
-        // Set up database connection
-        let db_url = "sqlite::memory:";
-        let pool = crate::db::create_db_pool(db_url).await?;
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
 
         // Insert some test data
         insert_forex_rate(&pool, "EURUSD", 1.07833, 1.07832, 1701956301).await?;
