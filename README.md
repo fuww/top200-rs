@@ -98,5 +98,6 @@ This project is licensed under the AGPL-3.0 License - see the LICENSE file for d
 - 2018-05: YNAP.MI (YOOX Net-a-Porter Group) - Delisted after being fully acquired by Richemont
 
 Note: Some tickers might have data provider issues:
+
 - ALPA4.SA (Alpargatas) - Still trades on Brazilian exchange as ALPA4.SA and ALPA3.SA
 - DLTI.TA - Currency code should be ILS instead of ILA
