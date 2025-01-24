@@ -12,6 +12,7 @@ mod exchange_rates;
 mod historical_marketcaps;
 mod marketcaps;
 mod models;
+mod ticker_details;
 mod utils;
 
 use anyhow::Result;

@@ -1,7 +1,49 @@
-
 # top200-rs Project Overview
 
 I'm working on `top200-rs`, a Rust-based market data tracking system for the top 200 fashion and retail companies. Here are the key documents to help you understand the current state and context:
+
+// General guidelines
+Always use Markdown for documentation and README files
+Maintain the existing structure of the README.md file
+
+// README.md structure
+Maintain the following structure in the README.md file:
+
+  1. Title and Awesome badge
+  2. Fork information and differences
+  3. Short description
+  4. "Why Use Rules in Windsurf?" section
+     - Benefits of Global Rules
+     - Benefits of Workspace Rules
+  5. Content
+     - Global Rules
+     - Workspace Rules
+  6. Directories
+  7. How to Use section
+  8. Contributing section
+  9. License section
+
+// Organization of rules
+Organize rules into two main directories:
+
+  1. global_rules/
+     - language/
+     - commit-message/
+     - code-style/
+     - documentation/
+     - security/
+     - performance/
+  2. workspace_rules/
+     - Frontend Frameworks and Libraries
+     - Backend and Full-Stack
+     - Mobile Development
+     - CSS and Styling
+     - State Management
+     - Database and API
+     - Testing
+     - Build Tools and Development
+     - Language-Specific
+     - Other
 
 - Main Documentation: [README.md](README.md) - Core vision, implementation details, and setup instructions
 - Data Collection: Daily automated collection of market cap data for fashion/retail companies

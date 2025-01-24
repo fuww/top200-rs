@@ -11,6 +11,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 ## TODO
 
 - add a command so I can test with just a few tickers
+- <https://neoexogenesis.com/posts/rust-windsurf-transformation/>
 
 ## Run
 

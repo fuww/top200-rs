@@ -141,7 +141,7 @@ mod tests {
             description: Some("Technology company".to_string()),
             homepage_url: Some("https://www.apple.com".to_string()),
             weighted_shares_outstanding: Some(16000000000.0),
-            employees: Some("100000+".to_string()),
+            employees: Some("100000".to_string()),
             revenue: Some(365000000000.0),
             revenue_usd: Some(365000000000.0),
             timestamp: Some("2024-01-01".to_string()),

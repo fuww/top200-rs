@@ -3,6 +3,7 @@ use crate::config;
 use crate::currencies::{convert_currency, get_rate_map_from_db, update_currencies};
 use crate::exchange_rates;
 use crate::models;
+use crate::ticker_details::{self, TickerDetails};
 use anyhow::Result;
 use chrono::Local;
 use csv::Writer;
@@ -19,16 +20,15 @@ async fn store_market_cap(pool: &SqlitePool, details: &models::Details, rate_map
     let timestamp = Local::now().naive_utc().and_utc().timestamp();
     let name = details.name.as_ref().unwrap_or(&String::new()).to_string();
     let currency_name = details.currency_name.as_ref().unwrap_or(&String::new()).to_string();
-    let description = details.description.as_ref().unwrap_or(&String::new()).to_string();
-    let homepage_url = details.homepage_url.as_ref().unwrap_or(&String::new()).to_string();
     let active = details.active.unwrap_or(true);
 
+    // Store market cap data
     sqlx::query!(
         r#"
         INSERT INTO market_caps (
             ticker, name, market_cap_original, original_currency, market_cap_eur, market_cap_usd,
-            exchange, active, description, homepage_url, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            exchange, active, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         details.ticker,
         name,
@@ -38,64 +38,68 @@ async fn store_market_cap(pool: &SqlitePool, details: &models::Details, rate_map
         usd_market_cap,
         currency_name,
         active,
-        description,
-        homepage_url,
         timestamp,
     )
     .execute(pool)
     .await?;
+
+    // Store ticker details
+    let ticker_details = TickerDetails {
+        ticker: details.ticker.clone(),
+        description: details.description.clone(),
+        homepage_url: details.homepage_url.clone(),
+        employees: details.employees.clone(),
+    };
+    ticker_details::update_ticker_details(pool, &ticker_details).await?;
 
     Ok(())
 }
 
 /// Fetch market cap data from the database
 async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
-    let rows = sqlx::query!(
+    let records = sqlx::query!(
         r#"
-        SELECT ticker, name, market_cap_original, original_currency, market_cap_eur, market_cap_usd,
-               exchange, active, description, homepage_url, strftime('%s', timestamp) as timestamp
-        FROM market_caps
-        WHERE timestamp = (SELECT MAX(timestamp) FROM market_caps)
+        SELECT 
+            m.ticker,
+            m.name,
+            m.market_cap_original,
+            m.original_currency,
+            m.market_cap_eur,
+            m.market_cap_usd,
+            m.exchange,
+            m.active,
+            strftime('%s', m.timestamp) as timestamp,
+            td.description,
+            td.homepage_url,
+            td.employees
+        FROM market_caps m
+        LEFT JOIN ticker_details td ON m.ticker = td.ticker
+        WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)
         "#
     )
     .fetch_all(pool)
     .await?;
 
-    // Get current exchange rates
-    let rate_map = get_rate_map_from_db(pool).await?;
-
-    let results = rows.into_iter()
-        .map(|row| {
-            let original_market_cap = row.market_cap_original.unwrap_or(0) as f64;
-            let original_currency = row.original_currency.unwrap_or_default();
-            let market_cap_eur = convert_currency(
-                original_market_cap,
-                &original_currency,
-                "EUR",
-                &rate_map,
-            );
-            let market_cap_usd = convert_currency(
-                original_market_cap,
-                &original_currency,
-                "USD",
-                &rate_map,
-            );
-
+    let results = records
+        .into_iter()
+        .map(|r| {
+            let market_cap_eur = r.market_cap_eur.unwrap_or(0) as f64;
             (
                 market_cap_eur,
                 vec![
-                    row.ticker.clone(), // Symbol
-                    row.ticker,         // Ticker
-                    row.name,
-                    original_market_cap.to_string(),
-                    original_currency,
-                    market_cap_eur.to_string(),
-                    market_cap_usd.to_string(),
-                    row.exchange.unwrap_or_default(),
-                    row.active.unwrap_or(true).to_string(),
-                    row.description.unwrap_or_default(),
-                    row.homepage_url.unwrap_or_default(),
-                    row.timestamp.map(|t| t.to_string()).unwrap_or_default(),
+                    r.ticker.clone(),
+                    r.ticker,
+                    r.name,
+                    r.market_cap_original.unwrap_or(0).to_string(),
+                    r.original_currency.unwrap_or_default(),
+                    r.market_cap_eur.unwrap_or(0).to_string(),
+                    r.market_cap_usd.unwrap_or(0).to_string(),
+                    r.exchange.unwrap_or_default(),
+                    r.active.unwrap_or(true).to_string(),
+                    r.description.unwrap_or_default(),
+                    r.homepage_url.unwrap_or_default(),
+                    r.employees.map(|e| e.to_string()).unwrap_or_default(),
+                    r.timestamp.unwrap_or_default().to_string(),
                 ],
             )
         })
@@ -199,6 +203,7 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Active",
         "Description",
         "Homepage URL",
+        "Employees",
         "Timestamp",
     ])?;
 
@@ -222,7 +227,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     // Filter for active companies and take top 100
     let active_results: Vec<_> = results
         .iter()
-        .filter(|(_, record)| record[8] == "true") // Active column
+        .filter(|(_, record)| record[7] == "true") // Active column
         .take(100)
         .collect();
 
@@ -245,6 +250,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Active",
         "Description",
         "Homepage URL",
+        "Employees",
         "Timestamp",
     ])?;
 
