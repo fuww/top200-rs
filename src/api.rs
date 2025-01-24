@@ -415,6 +415,7 @@ pub struct ExchangeRate {
 
 #[derive(Debug, Deserialize)]
 pub struct HistoricalMarketCap {
+    #[allow(dead_code)]
     pub ticker: String,
     pub name: String,
     pub market_cap_original: f64,

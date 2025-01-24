@@ -25,22 +25,6 @@ pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Resul
     Ok(())
 }
 
-/// Get a currency from the database by its code
-pub async fn get_currency(pool: &SqlitePool, code: &str) -> Result<Option<(String, String)>> {
-    let record = sqlx::query_as::<_, (String, String)>(
-        r#"
-        SELECT code, name
-        FROM currencies
-        WHERE code = ?
-        "#,
-    )
-    .bind(code)
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(record)
-}
-
 /// List all currencies in the database
 pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>> {
     let records = sqlx::query_as::<_, (String, String)>(
@@ -54,62 +38,6 @@ pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>>
     .await?;
 
     Ok(records)
-}
-
-/// Get a map of exchange rates between currencies from hardcoded values
-/// Deprecated: Use get_rate_map_from_db instead to get real-time rates
-#[deprecated(
-    since = "0.1.0",
-    note = "Use get_rate_map_from_db instead to get real-time rates"
-)]
-pub fn get_rate_map() -> HashMap<String, f64> {
-    let mut rate_map = HashMap::new();
-
-    // Base rates (currency to USD)
-    rate_map.insert("EUR/USD".to_string(), 1.08);
-    rate_map.insert("GBP/USD".to_string(), 1.25);
-    rate_map.insert("CHF/USD".to_string(), 1.14);
-    rate_map.insert("SEK/USD".to_string(), 0.096);
-    rate_map.insert("DKK/USD".to_string(), 0.145);
-    rate_map.insert("NOK/USD".to_string(), 0.093);
-    rate_map.insert("JPY/USD".to_string(), 0.0068);
-    rate_map.insert("HKD/USD".to_string(), 0.128);
-    rate_map.insert("CNY/USD".to_string(), 0.139);
-    rate_map.insert("BRL/USD".to_string(), 0.203);
-    rate_map.insert("CAD/USD".to_string(), 0.737);
-    rate_map.insert("ILS/USD".to_string(), 0.27); // Israeli Shekel rate
-    rate_map.insert("ZAR/USD".to_string(), 0.053); // South African Rand rate
-
-    // Add reverse rates (USD to currency)
-    let mut pairs_to_add = Vec::new();
-    for (pair, &rate) in rate_map.clone().iter() {
-        if let Some((from, to)) = pair.split_once('/') {
-            pairs_to_add.push((format!("{}/{}", to, from), 1.0 / rate));
-        }
-    }
-
-    // Add cross rates (currency to currency)
-    let base_pairs: Vec<_> = rate_map.clone().into_iter().collect();
-    for (pair1, rate1) in &base_pairs {
-        if let Some((from1, "USD")) = pair1.split_once('/') {
-            for (pair2, rate2) in &base_pairs {
-                if let Some((from2, "USD")) = pair2.split_once('/') {
-                    if from1 != from2 {
-                        // Calculate cross rate: from1/from2 = (from1/USD) / (from2/USD)
-                        // Example: EUR/JPY = (EUR/USD=1.08) / (JPY/USD=0.0068) = 158.82
-                        pairs_to_add.push((format!("{}/{}", from1, from2), rate1 / rate2));
-                    }
-                }
-            }
-        }
-    }
-
-    // Add all the new pairs
-    for (pair, rate) in pairs_to_add {
-        rate_map.insert(pair, rate);
-    }
-
-    rate_map
 }
 
 /// Get a map of exchange rates between currencies from the database
@@ -264,31 +192,6 @@ pub async fn get_latest_forex_rate(
     Ok(record)
 }
 
-/// Get all forex rates for a symbol within a time range
-pub async fn get_forex_rates(
-    pool: &SqlitePool,
-    symbol: &str,
-    from_timestamp: i64,
-    to_timestamp: i64,
-) -> Result<Vec<(f64, f64, i64)>> {
-    let records = sqlx::query_as::<_, (f64, f64, i64)>(
-        r#"
-        SELECT ask, bid, timestamp
-        FROM forex_rates
-        WHERE symbol = ?
-        AND timestamp BETWEEN ? AND ?
-        ORDER BY timestamp DESC
-        "#,
-    )
-    .bind(symbol)
-    .bind(from_timestamp)
-    .bind(to_timestamp)
-    .fetch_all(pool)
-    .await?;
-
-    Ok(records)
-}
-
 /// List all unique symbols in the forex_rates table
 pub async fn list_forex_symbols(pool: &SqlitePool) -> Result<Vec<String>> {
     let records = sqlx::query_as::<_, (String,)>(
@@ -359,7 +262,7 @@ mod tests {
         }
 
         // Get all currency codes from rate_map
-        let rate_map = get_rate_map();
+        let rate_map = get_rate_map_from_db(&pool).await?;
         let mut currencies: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         // Extract unique currency codes from rate pairs
@@ -372,9 +275,9 @@ mod tests {
 
         // Check if each currency exists in the database
         for currency in currencies {
-            let result = get_currency(&pool, &currency).await?;
+            let result = list_currencies(&pool).await?;
             assert!(
-                result.is_some(),
+                result.iter().any(|(c, _)| c == &currency),
                 "Currency {} is used in rate_map but not found in database",
                 currency
             );
@@ -385,7 +288,7 @@ mod tests {
 
     #[test]
     fn test_convert_currency() {
-        let rate_map = get_rate_map();
+        let rate_map = get_rate_map_from_db(&SqlitePool::connect("sqlite::memory:").await.unwrap()).await.unwrap();
 
         // Test direct USD conversions
         assert_eq!(convert_currency(100.0, "EUR", "USD", &rate_map), 108.0);
@@ -550,23 +453,17 @@ mod tests {
 
         // Test inserting and retrieving a currency
         insert_currency(&pool, "XYZ", "Test Currency").await?;
-        let currency = get_currency(&pool, "XYZ").await?;
-        assert!(currency.is_some());
-        let (code, name) = currency.unwrap();
-        assert_eq!(code, "XYZ");
-        assert_eq!(name, "Test Currency");
+        let currencies = list_currencies(&pool).await?;
+        assert!(currencies.iter().any(|(c, _)| c == "XYZ"));
 
         // Test updating an existing currency
         insert_currency(&pool, "XYZ", "Updated Currency").await?;
-        let updated = get_currency(&pool, "XYZ").await?;
-        assert!(updated.is_some());
-        let (code, name) = updated.unwrap();
-        assert_eq!(code, "XYZ");
-        assert_eq!(name, "Updated Currency");
+        let updated = list_currencies(&pool).await?;
+        assert!(updated.iter().any(|(c, n)| c == "XYZ" && n == "Updated Currency"));
 
         // Test getting non-existent currency
-        let missing = get_currency(&pool, "NON").await?;
-        assert!(missing.is_none());
+        let missing = list_currencies(&pool).await?;
+        assert!(!missing.iter().any(|(c, _)| c == "NON"));
 
         // Test listing currencies
         insert_currency(&pool, "ABC", "Another Currency").await?;

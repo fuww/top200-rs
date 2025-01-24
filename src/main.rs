@@ -16,7 +16,7 @@ mod utils;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use sqlx::sqlite::SqlitePool;
+// use sqlx::sqlite::SqlitePool;
 use std::env;
 use tokio;
 

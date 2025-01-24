@@ -1,7 +1,6 @@
 use crate::api;
 use crate::config;
 use crate::currencies::get_rate_map_from_db;
-use crate::db;
 use anyhow::Result;
 use chrono::Local;
 use csv::Writer;
