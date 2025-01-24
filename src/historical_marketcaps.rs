@@ -6,7 +6,7 @@ use crate::api;
 use crate::config;
 use crate::currencies::{convert_currency, get_rate_map_from_db};
 use anyhow::Result;
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
@@ -30,10 +30,8 @@ pub async fn fetch_historical_marketcaps(
 
     for year in start_year..=end_year {
         // Get Dec 31st of each year
-        let naive_dt = NaiveDateTime::new(
-            NaiveDate::from_ymd_opt(year, 12, 31).unwrap(),
-            NaiveTime::from_hms_opt(23, 59, 59).unwrap(),
-        );
+        let date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
+        let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
         let datetime_utc = naive_dt.and_utc();
         println!("Fetching exchange rates for {}", naive_dt);
         let rate_map = get_rate_map_from_db(pool).await?;
@@ -60,7 +58,7 @@ pub async fn fetch_historical_marketcaps(
                     );
 
                     // Store the Unix timestamp of the historical date
-                    let timestamp = naive_dt.timestamp();
+                    let timestamp = naive_dt.and_utc().timestamp();
 
                     // Insert into database
                     sqlx::query!(

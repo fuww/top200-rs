@@ -44,6 +44,17 @@ $ sqlite3 top200.db < tests/market_caps_totals_per_year.sql
 2024|111
 ```
 
+## Example commands
+
+```sh
+cargo run -- export-us
+cargo run -- export-eu
+cargo run -- export-combined
+cargo run -- historical-marketcaps --start-year 2020 --end-year 2024
+# which fr Windsurf to use Nix, will become:
+nix develop --command cargo run -- historical-marketcaps --start-year 2020 --end-year 2024
+```
+
 ## Calculate market caps history
 
 Many analysts use the last trading day of each year to calculate yearly market cap snapshots. This ensures a consistent reference point and reflects end-of-year valuations. Other methods include averaging across each year or using the first trading day, but the closing price on December 31 (or the final trading session) is most common.

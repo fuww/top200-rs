@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 mod api;
-mod bar_chart;
 mod config;
 mod currencies;
 mod db;
@@ -14,12 +13,12 @@ mod historical_marketcaps;
 mod marketcaps;
 mod models;
 mod utils;
-mod viz;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use sqlx::sqlite::SqlitePool;
 use std::env;
+use tokio;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -48,12 +47,6 @@ enum Commands {
     AddCurrency { code: String, name: String },
     /// List currencies
     ListCurrencies,
-    /// Generate bar chart of top 100 companies
-    GenerateBarChart,
-    // /// Generate heatmap
-    // GenerateHeatmap,
-    // /// List top 100
-    // ListTop100,
 }
 
 #[tokio::main]
@@ -69,8 +62,6 @@ async fn main() -> Result<()> {
         Some(Commands::ExportUs) => details_us_polygon::export_details_us_csv(&pool).await?,
         Some(Commands::ExportEu) => details_eu_fmp::export_details_eu_csv(&pool).await?,
         Some(Commands::ExportCombined) => {
-            // details_us_polygon::export_details_us_csv(&pool).await?;
-            // details_eu_fmp::export_details_eu_csv(&pool).await?;
             marketcaps::marketcaps(&pool).await?;
         }
         Some(Commands::ListUs) => details_us_polygon::list_details_us(&pool).await?,
@@ -97,19 +88,6 @@ async fn main() -> Result<()> {
                 println!("{}: {}", code, name);
             }
         }
-        Some(Commands::GenerateBarChart) => {
-            async fn generate_bar_chart_handler(pool: &SqlitePool) -> Result<()> {
-                bar_chart::generate_bar_chart(pool).await?;
-                Ok(())
-            }
-            generate_bar_chart_handler(&pool).await?;
-        }
-        // Some(Commands::GenerateHeatmap) => {
-        //     marketcaps::generate_heatmap_from_latest()?;
-        // }
-        // Some(Commands::ListTop100) => {
-        //     marketcaps::output_top_100_active()?;
-        // }
         None => {
             marketcaps::marketcaps(&pool).await?;
         }
