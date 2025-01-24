@@ -1,6 +1,7 @@
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db};
+use crate::currencies::{convert_currency, get_rate_map_from_db, update_currencies};
+use crate::exchange_rates;
 use crate::models;
 use anyhow::Result;
 use chrono::Local;
@@ -60,18 +61,36 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
     .fetch_all(pool)
     .await?;
 
+    // Get current exchange rates
+    let rate_map = get_rate_map_from_db(pool).await?;
+
     let results = rows.into_iter()
         .map(|row| {
+            let original_market_cap = row.market_cap_original.unwrap_or(0) as f64;
+            let original_currency = row.original_currency.unwrap_or_default();
+            let market_cap_eur = convert_currency(
+                original_market_cap,
+                &original_currency,
+                "EUR",
+                &rate_map,
+            );
+            let market_cap_usd = convert_currency(
+                original_market_cap,
+                &original_currency,
+                "USD",
+                &rate_map,
+            );
+
             (
-                row.market_cap_eur.unwrap_or(0) as f64,
+                market_cap_eur,
                 vec![
                     row.ticker.clone(), // Symbol
                     row.ticker,         // Ticker
                     row.name,
-                    row.market_cap_original.unwrap_or(0).to_string(),
-                    row.original_currency.unwrap_or_default(),
-                    row.market_cap_eur.unwrap_or(0).to_string(),
-                    row.market_cap_usd.unwrap_or(0).to_string(),
+                    original_market_cap.to_string(),
+                    original_currency,
+                    market_cap_eur.to_string(),
+                    market_cap_usd.to_string(),
                     row.exchange.unwrap_or_default(),
                     row.active.unwrap_or(true).to_string(),
                     row.description.unwrap_or_default(),
@@ -115,19 +134,38 @@ async fn update_market_caps(pool: &SqlitePool) -> Result<()> {
 
     // Update market cap data in database
     println!("Updating market cap data in database...");
+    let mut failed_tickers = Vec::new();
     for ticker in &tickers {
         let rate_map = rate_map.clone();
         let fmp_client = fmp_client.clone();
 
-        if let Ok(details) = fmp_client.get_details(ticker, &rate_map).await {
-            if let Err(e) = store_market_cap(pool, &details, &rate_map).await {
-                eprintln!("Failed to store market cap for {}: {}", ticker, e);
+        match fmp_client.get_details(ticker, &rate_map).await {
+            Ok(details) => {
+                if let Err(e) = store_market_cap(pool, &details, &rate_map).await {
+                    eprintln!("Failed to store market cap for {}: {}", ticker, e);
+                    failed_tickers.push((ticker, format!("Failed to store market cap: {}", e)));
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to fetch details for {}: {}", ticker, e);
+                failed_tickers.push((ticker, format!("Failed to fetch details: {}", e)));
             }
         }
         progress.inc(1);
     }
     progress.finish();
-    println!("✅ Market cap data updated in database");
+    
+    // Print summary of failed tickers
+    if !failed_tickers.is_empty() {
+        println!("\nFailed to process {} tickers:", failed_tickers.len());
+        for (ticker, error) in &failed_tickers {
+            println!("  {} - {}", ticker, error);
+        }
+    }
+    
+    println!("✅ Market cap data updated in database ({} successful, {} failed)",
+             total_tickers - failed_tickers.len(),
+             failed_tickers.len());
 
     Ok(())
 }
@@ -173,13 +211,69 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
     Ok(())
 }
 
+/// Export top 100 active companies to CSV
+pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
+    // Get market cap data from database
+    let mut results = get_market_caps(pool).await?;
+
+    // Sort by EUR market cap
+    results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Filter for active companies and take top 100
+    let active_results: Vec<_> = results
+        .iter()
+        .filter(|(_, record)| record[8] == "true") // Active column
+        .take(100)
+        .collect();
+
+    // Export to CSV
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+    let filename = format!("output/top_100_active_{}.csv", timestamp);
+    let file = std::fs::File::create(&filename)?;
+    let mut writer = Writer::from_writer(file);
+
+    // Write headers
+    writer.write_record(&[
+        "Symbol",
+        "Ticker",
+        "Name",
+        "Market Cap (Original)",
+        "Original Currency",
+        "Market Cap (EUR)",
+        "Market Cap (USD)",
+        "Exchange",
+        "Active",
+        "Description",
+        "Homepage URL",
+        "Timestamp",
+    ])?;
+
+    // Write data
+    for (_, record) in active_results {
+        writer.write_record(record)?;
+    }
+
+    println!("✅ Top 100 active companies exported to {}", filename);
+    Ok(())
+}
+
 /// Main entry point for market cap functionality
 pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
-    // First update the database
+    // First update currencies and exchange rates
+    let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
+        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+    let fmp_client = api::FMPClient::new(api_key);
+    
+    println!("Updating currencies and exchange rates...");
+    update_currencies(&fmp_client, pool).await?;
+    exchange_rates::update_exchange_rates(&fmp_client, pool).await?;
+    
+    // Then update market caps
     update_market_caps(pool).await?;
     
-    // Then export the data
+    // Export both the full list and top 100 active
     export_market_caps(pool).await?;
+    export_top_100_active(pool).await?;
 
     Ok(())
 }

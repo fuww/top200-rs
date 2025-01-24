@@ -5,6 +5,7 @@
 use anyhow::Result;
 use sqlx::sqlite::SqlitePool;
 use std::collections::HashMap;
+use crate::api::FMPClient;
 
 /// Insert a currency into the database
 pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Result<()> {
@@ -205,6 +206,34 @@ pub async fn list_forex_symbols(pool: &SqlitePool) -> Result<Vec<String>> {
     .await?;
 
     Ok(records.into_iter().map(|(symbol,)| symbol).collect())
+}
+
+/// Update currencies from FMP API
+pub async fn update_currencies(fmp_client: &FMPClient, pool: &SqlitePool) -> Result<()> {
+    println!("Fetching currencies from FMP API...");
+    let exchange_rates = match fmp_client.get_exchange_rates().await {
+        Ok(rates) => {
+            println!("✅ Currencies fetched");
+            rates
+        }
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to fetch currencies: {}", e));
+        }
+    };
+
+    // Extract unique currencies from exchange rates
+    for rate in exchange_rates {
+        if let Some(name) = rate.name {
+            if let Some((from, to)) = name.split_once('/') {
+                // Insert both currencies
+                insert_currency(pool, from, from).await?;
+                insert_currency(pool, to, to).await?;
+            }
+        }
+    }
+
+    println!("✅ Currencies updated in database");
+    Ok(())
 }
 
 #[cfg(test)]
