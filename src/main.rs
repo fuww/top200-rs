@@ -13,6 +13,7 @@ mod historical_marketcaps;
 mod marketcaps;
 mod models;
 mod monthly_historical_marketcaps;
+mod monthly_marketcap_comparison;
 mod ticker_details;
 mod utils;
 
@@ -41,6 +42,8 @@ enum Commands {
     ListUs,
     /// List EU market caps
     ListEu,
+    /// Export monthly market cap comparison to CSV
+    ExportMonthlyComparison,
     /// Export exchange rates to CSV
     ExportRates,
     /// Fetch historical market caps
@@ -65,16 +68,15 @@ async fn main() -> Result<()> {
     match cli.command {
         Some(Commands::ExportUs) => details_us_polygon::export_details_us_csv(&pool).await?,
         Some(Commands::ExportEu) => details_eu_fmp::export_details_eu_csv(&pool).await?,
-        Some(Commands::ExportCombined) => {
-            marketcaps::marketcaps(&pool).await?;
-        }
+        Some(Commands::ExportCombined) => marketcaps::export_market_caps(&pool).await?,
+        Some(Commands::ExportMonthlyComparison) => monthly_marketcap_comparison::export_monthly_comparison_csv(&pool).await?,
         Some(Commands::ListUs) => details_us_polygon::list_details_us(&pool).await?,
         Some(Commands::ListEu) => details_eu_fmp::list_details_eu(&pool).await?,
         Some(Commands::ExportRates) => {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
-            exchange_rates::update_exchange_rates(&fmp_client, &pool).await?;
+            exchange_rates::export_exchange_rates_csv(&fmp_client, &pool).await?;
         }
         Some(Commands::FetchHistoricalMarketCaps {
             start_year,
@@ -109,7 +111,7 @@ async fn main() -> Result<()> {
             }
         }
         None => {
-            marketcaps::marketcaps(&pool).await?;
+            marketcaps::export_market_caps(&pool).await?;
         }
     }
 
