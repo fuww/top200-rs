@@ -192,6 +192,7 @@ impl FMPClient {
         ticker: &str,
         date: &DateTime<Utc>,
     ) -> Result<HistoricalMarketCap> {
+        // First try historical market cap endpoint
         let url = format!(
             "https://financialmodelingprep.com/api/v3/historical-market-capitalization/{}?from={}&to={}&apikey={}",
             ticker,
@@ -214,23 +215,51 @@ impl FMPClient {
             let profiles: Vec<FMPCompanyProfile> = self.make_request(profile_url).await?;
 
             if let Some(profile) = profiles.first() {
-                Ok(HistoricalMarketCap {
+                return Ok(HistoricalMarketCap {
                     ticker: ticker.to_string(),
                     name: profile.company_name.clone(),
                     market_cap_original: market_cap,
                     original_currency: "USD".to_string(), // FMP returns USD by default
                     exchange: profile.exchange.clone(),
                     price,
-                })
-            } else {
-                anyhow::bail!("No company profile found for ticker {}", ticker)
+                });
             }
-        } else {
-            anyhow::bail!("No historical market cap data found for ticker {}", ticker)
         }
+
+        // If historical data not found, try the quote endpoint
+        let quote_url = format!(
+            "https://financialmodelingprep.com/api/v3/quote/{}?apikey={}",
+            ticker, self.api_key
+        );
+
+        let quotes: Vec<Value> = self.make_request(quote_url).await?;
+
+        if let Some(quote) = quotes.first() {
+            let market_cap = quote["marketCap"].as_f64().unwrap_or(0.0);
+            let price = quote["price"].as_f64().unwrap_or(0.0);
+
+            // Get company profile for additional info
+            let profile_url = format!(
+                "https://financialmodelingprep.com/api/v3/profile/{}?apikey={}",
+                ticker, self.api_key
+            );
+            let profiles: Vec<FMPCompanyProfile> = self.make_request(profile_url).await?;
+
+            if let Some(profile) = profiles.first() {
+                return Ok(HistoricalMarketCap {
+                    ticker: ticker.to_string(),
+                    name: profile.company_name.clone(),
+                    market_cap_original: market_cap,
+                    original_currency: "USD".to_string(), // FMP returns USD by default
+                    exchange: profile.exchange.clone(),
+                    price,
+                });
+            }
+        }
+
+        anyhow::bail!("No market cap data found for ticker {}", ticker)
     }
 
-    #[allow(dead_code)]
     pub async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");
@@ -265,7 +294,6 @@ impl FMPClient {
         Ok(ratios.into_iter().next())
     }
 
-    #[allow(dead_code)]
     pub async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>> {
         if ticker.is_empty() {
             anyhow::bail!("ticker empty");

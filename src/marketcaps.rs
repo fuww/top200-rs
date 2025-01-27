@@ -82,7 +82,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
     let results = records
         .into_iter()
         .map(|r| {
-            let market_cap_eur = r.market_cap_eur.unwrap_or(0) as f64;
+            let market_cap_eur = r.market_cap_eur.unwrap_or(0.0) as f64;
             (
                 market_cap_eur,
                 vec![
@@ -91,7 +91,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
                     r.name,
                     r.market_cap_original.unwrap_or(0).to_string(),
                     r.original_currency.unwrap_or_default(),
-                    r.market_cap_eur.unwrap_or(0).to_string(),
+                    r.market_cap_eur.unwrap_or(0.0).to_string(),
                     r.market_cap_usd.unwrap_or(0).to_string(),
                     r.exchange.unwrap_or_default(),
                     if r.active.unwrap_or(true) { "true".to_string() } else { "false".to_string() },
