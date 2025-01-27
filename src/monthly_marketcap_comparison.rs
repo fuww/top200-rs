@@ -27,6 +27,7 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
         "Difference (%)",
         "Previous Month Date",
         "Latest Month Date",
+        "Warning",
     ])?;
 
     // Get November and December 2024 data for each ticker
@@ -112,6 +113,13 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
             0.0
         };
 
+        // Add warning for unchanged values
+        let warning = if previous_cap > 0.0 && (difference.abs() / previous_cap).abs() < 0.0001 {
+            "WARNING: Market cap unchanged between months"
+        } else {
+            ""
+        };
+
         writer.write_record(&[
             &ticker,
             &name,
@@ -121,6 +129,7 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
             &format!("{:.2}%", percentage),
             &previous_date.unwrap_or_default(),
             &latest_date.unwrap_or_default(),
+            warning,
         ])?;
     }
 
@@ -136,6 +145,7 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
             &format!("{:.2}", total_latest),
             &format!("{:.2}", total_difference),
             &format!("{:.2}%", total_percentage),
+            "",
             "",
             "",
         ])?;
