@@ -16,6 +16,17 @@ use tokio::time::sleep;
 use crate::currencies::convert_currency;
 use crate::models::{Details, FMPCompanyProfile, FMPIncomeStatement, FMPRatios, PolygonResponse};
 
+use mockall::automock;
+
+#[automock]
+pub trait FMPClientTrait {
+    async fn get_details(&self, ticker: &str, rate_map: &HashMap<String, f64>) -> Result<Details>;
+    async fn get_historical_market_cap(&self, ticker: &str, date: &DateTime<Utc>) -> Result<HistoricalMarketCap>;
+    async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>>;
+    async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>>;
+    async fn get_exchange_rates(&self) -> Result<Vec<ExchangeRate>>;
+}
+
 pub struct PolygonClient {
     client: Client,
     api_key: String,
@@ -26,6 +37,29 @@ pub struct FMPClient {
     client: Client,
     api_key: String,
     rate_limiter: Arc<Semaphore>,
+}
+
+#[async_trait::async_trait]
+impl FMPClientTrait for FMPClient {
+    async fn get_details(&self, ticker: &str, rate_map: &HashMap<String, f64>) -> Result<Details> {
+        self.get_details(ticker, rate_map).await
+    }
+
+    async fn get_historical_market_cap(&self, ticker: &str, date: &DateTime<Utc>) -> Result<HistoricalMarketCap> {
+        self.get_historical_market_cap(ticker, date).await
+    }
+
+    async fn get_ratios(&self, ticker: &str) -> Result<Option<FMPRatios>> {
+        self.get_ratios(ticker).await
+    }
+
+    async fn get_income_statement(&self, ticker: &str) -> Result<Option<FMPIncomeStatement>> {
+        self.get_income_statement(ticker).await
+    }
+
+    async fn get_exchange_rates(&self) -> Result<Vec<ExchangeRate>> {
+        self.get_exchange_rates().await
+    }
 }
 
 impl FMPClient {

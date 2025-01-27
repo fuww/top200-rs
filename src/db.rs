@@ -21,3 +21,13 @@ pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
 
     Ok(pool)
 }
+
+pub async fn migrate(pool: &SqlitePool) -> Result<()> {
+    sqlx::migrate!().run(pool).await?;
+    Ok(())
+}
+
+#[cfg(test)]
+pub async fn create_test_pool() -> Result<SqlitePool> {
+    create_db_pool("sqlite::memory:").await
+}

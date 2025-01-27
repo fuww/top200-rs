@@ -285,3 +285,8 @@ pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    include!("marketcaps_test.rs");
+}
