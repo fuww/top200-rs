@@ -206,6 +206,17 @@ impl FMPClient {
         if let Some(data) = response.first() {
             let market_cap = data["marketCap"].as_f64().unwrap_or(0.0);
             let price = data["price"].as_f64().unwrap_or(0.0);
+            let response_date = data["date"].as_str().unwrap_or("");
+
+            // Check if the response date matches our requested date
+            if response_date != date.format("%Y-%m-%d").to_string() {
+                eprintln!(
+                    "Warning: Received historical market cap for {} from {} but requested {}",
+                    ticker,
+                    response_date,
+                    date.format("%Y-%m-%d")
+                );
+            }
 
             // Get company profile for additional info
             let profile_url = format!(
@@ -225,6 +236,13 @@ impl FMPClient {
                 });
             }
         }
+
+        // Log fallback to quote endpoint
+        eprintln!(
+            "Warning: No historical market cap found for {} on {}, falling back to quote endpoint",
+            ticker,
+            date.format("%Y-%m-%d")
+        );
 
         // If historical data not found, try the quote endpoint
         let quote_url = format!(

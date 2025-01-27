@@ -29,30 +29,19 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
         "Latest Month Date",
     ])?;
 
-    // Get the last two months of data for each ticker
+    // Get November and December 2024 data for each ticker
     let records = sqlx::query(
         r#"
-        WITH MonthCounts AS (
-            SELECT 
-                date(timestamp, 'start of month') as month,
-                COUNT(*) as count
-            FROM market_caps
-            WHERE market_cap_eur IS NOT NULL
-            GROUP BY month
-            HAVING count > 100  -- Only consider months with substantial data
-            ORDER BY month DESC
-            LIMIT 2
-        ),
-        MonthlyData AS (
+        WITH MonthlyData AS (
             SELECT 
                 m.ticker,
                 m.name,
                 CAST(m.market_cap_eur AS REAL) as market_cap_eur,
-                date(m.timestamp) as date,
-                date(m.timestamp, 'start of month') as month
+                date(m.timestamp, 'unixepoch') as date,
+                strftime('%Y-%m', datetime(m.timestamp, 'unixepoch')) as month
             FROM market_caps m
-            INNER JOIN MonthCounts c ON date(m.timestamp, 'start of month') = c.month
             WHERE m.market_cap_eur IS NOT NULL
+            AND strftime('%Y-%m', datetime(m.timestamp, 'unixepoch')) IN ('2024-11', '2024-12')
         ),
         RankedData AS (
             SELECT 
@@ -66,11 +55,6 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
         ),
         FilteredData AS (
             SELECT * FROM RankedData WHERE rn = 1
-        ),
-        ComparisonMonths AS (
-            SELECT month, 
-                   ROW_NUMBER() OVER (ORDER BY month DESC) as rn 
-            FROM MonthCounts
         )
         SELECT 
             d1.ticker,
@@ -88,9 +72,8 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
         FROM FilteredData d1
         LEFT JOIN FilteredData d2 
             ON d1.ticker = d2.ticker 
-            AND d2.month < d1.month
-        WHERE d1.month = (SELECT month FROM ComparisonMonths WHERE rn = 1)
-            AND (d2.month IS NULL OR d2.month = (SELECT month FROM ComparisonMonths WHERE rn = 2))
+            AND d2.month = '2024-11'
+        WHERE d1.month = '2024-12'
         ORDER BY d1.market_cap_eur DESC NULLS LAST
         "#
     )

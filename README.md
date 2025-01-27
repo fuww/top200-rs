@@ -61,6 +61,15 @@ Get a list of available commands:
 cargo run -- --help
 ```
 
+## Database
+
+Check the data in the database with:
+
+```sh
+sqlite3 top200.db < tests/market_caps_totals_per_month.sql
+sqlite3 top200.db < tests/market_caps_totals_per_year.sql
+```
+
 ## Development
 
 ### Resources
