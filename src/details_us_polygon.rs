@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2025 Joost van der Laan
+// SPDX-License-Identifier: AGPL-3.0-only
+
 use crate::api::PolygonClient;
 use crate::config;
 use anyhow::Result;

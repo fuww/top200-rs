@@ -1,0 +1,19 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: top200-rs
+Upstream-Contact: Joost van der Laan <>
+Source: https://github.com/javdl/top200-rs
+
+# Binary and generated files
+Files: *.png *.csv *.db
+Copyright: 2025 Joost van der Laan
+License: AGPL-3.0-only
+
+# Config files
+Files: .gitconfig .rustfmt.toml .windsurfrules
+Copyright: 2025 Joost van der Laan
+License: AGPL-3.0-only
+
+# SQL files
+Files: migrations/*.sql tests/*.sql
+Copyright: 2025 Joost van der Laan
+License: AGPL-3.0-only

@@ -1,4 +1,7 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: 2025 Joost van der Laan
+# SPDX-License-Identifier: AGPL-3.0-only
+
 docker pull docker.all-hands.dev/all-hands-ai/runtime:0.21-nikolaik
 
 export WORKSPACE_BASE=$HOME/git/top200-rs

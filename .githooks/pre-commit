@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2025 Joost van der Laan
+# SPDX-License-Identifier: AGPL-3.0-only
 
 cargo fmt --all --check
 
@@ -6,3 +8,7 @@ if [ $? -ne 0 ]; then
   echo "Formatting check failed. Please run 'cargo fmt --all' and commit again."
   exit 1
 fi
+
+# Check REUSE compliance
+echo "Checking REUSE compliance..."
+reuse lint || exit 1

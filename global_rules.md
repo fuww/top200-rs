@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2025 Joost van der Laan
+SPDX-License-Identifier: AGPL-3.0-only
+-->
+
 Write a short english commit message (maximum one sentence) for every change you make, and always format it in a code block. Use the following guidelines for consistent and descriptive commit messages:
 
 prefix: short description (maximum one sentence)
