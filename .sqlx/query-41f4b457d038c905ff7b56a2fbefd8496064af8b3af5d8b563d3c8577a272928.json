@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 {
   "db_name": "SQLite",
   "query": "\n                        INSERT INTO market_caps (\n                            ticker, name, market_cap_original, original_currency,\n                            market_cap_eur, market_cap_usd, exchange, price,\n                            active, timestamp\n                        )\n                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n                        ",

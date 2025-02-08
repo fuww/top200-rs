@@ -1,0 +1,22 @@
+version = 1
+SPDX-PackageName = "top200-rs"
+SPDX-PackageSupplier = "Joost van der Laan <>"
+SPDX-PackageDownloadLocation = "https://github.com/javdl/top200-rs"
+
+[[annotations]]
+path = ["**.png", "**.csv", "**.db"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Joost van der Laan"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [".gitconfig", ".rustfmt.toml", ".windsurfrules"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Joost van der Laan"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = ["migrations/**.sql", "tests/**.sql"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2025 Joost van der Laan"
+SPDX-License-Identifier = "AGPL-3.0-only"

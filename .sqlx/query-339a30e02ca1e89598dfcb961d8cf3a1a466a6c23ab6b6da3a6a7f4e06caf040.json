@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 {
   "db_name": "SQLite",
   "query": "\n        SELECT \n            m.ticker,\n            m.name,\n            m.market_cap_original,\n            m.original_currency,\n            m.market_cap_eur,\n            m.market_cap_usd,\n            m.exchange,\n            m.active,\n            strftime('%s', m.timestamp) as timestamp,\n            td.description,\n            td.homepage_url,\n            td.employees\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)\n        ",

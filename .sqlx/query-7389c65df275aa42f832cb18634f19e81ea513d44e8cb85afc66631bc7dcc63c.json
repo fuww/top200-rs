@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+//
+// SPDX-License-Identifier: AGPL-3.0-only
+
 {
   "db_name": "SQLite",
   "query": "\n        INSERT INTO ticker_details (ticker, description, homepage_url, employees)\n        VALUES (?, ?, ?, ?)\n        ON CONFLICT(ticker) DO UPDATE SET\n            description = excluded.description,\n            homepage_url = excluded.homepage_url,\n            employees = excluded.employees,\n            updated_at = CURRENT_TIMESTAMP\n        ",
