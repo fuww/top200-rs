@@ -91,6 +91,10 @@ jobs:
   lints:
     name: 'Static Analysis: cargo fmt & clippy'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
