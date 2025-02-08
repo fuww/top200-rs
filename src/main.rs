@@ -1,7 +1,3 @@
-// SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
-//
-// SPDX-License-Identifier: AGPL-3.0-only
-
 mod api;
 mod config;
 mod currencies;
@@ -19,7 +15,6 @@ mod utils;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-// use sqlx::sqlite::SqlitePool;
 use std::env;
 use tokio;
 
