@@ -2,12 +2,12 @@ use crate::config;
 use anyhow::Result;
 use chrono::Local;
 use csv::Writer;
-use sqlx::{Row, sqlite::SqlitePool};
+use sqlx::{sqlite::SqlitePool, Row};
 use std::path::PathBuf;
 
 pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
     let _config = config::load_config()?;
-    
+
     // Create output directory if it doesn't exist
     let output_dir = PathBuf::from("output");
     std::fs::create_dir_all(&output_dir)?;
@@ -76,7 +76,7 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
             AND d2.month = '2024-11'
         WHERE d1.month = '2024-12'
         ORDER BY d1.market_cap_eur DESC NULLS LAST
-        "#
+        "#,
     )
     .fetch_all(pool)
     .await?;
@@ -96,7 +96,7 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
 
         let latest_cap = latest_market_cap.unwrap_or_default();
         let previous_cap = previous_market_cap.unwrap_or_default();
-        
+
         // Update totals for market that existed in both months
         if previous_cap > 0.0 {
             total_previous += previous_cap;
@@ -151,6 +151,9 @@ pub async fn export_monthly_comparison_csv(pool: &SqlitePool) -> Result<()> {
         ])?;
     }
 
-    println!("\n✅ Monthly comparison CSV file created at: {}", csv_path.display());
+    println!(
+        "\n✅ Monthly comparison CSV file created at: {}",
+        csv_path.display()
+    );
     Ok(())
 }

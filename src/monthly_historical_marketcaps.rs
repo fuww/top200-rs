@@ -66,7 +66,7 @@ pub async fn fetch_monthly_historical_marketcaps(
                                 );
                             }
                         }
-                        
+
                         // Update last known cap
                         last_known_caps.insert(ticker.to_string(), market_cap.market_cap_original);
 

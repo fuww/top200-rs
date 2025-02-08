@@ -43,8 +43,12 @@ pub async fn fetch_historical_marketcaps(
 
             let datetime_utc = DateTime::from_naive_utc_and_offset(
                 NaiveDateTime::new(
-                    chrono::NaiveDate::from_ymd_opt(year, month, get_last_day_of_month(year, month))
-                        .unwrap(),
+                    chrono::NaiveDate::from_ymd_opt(
+                        year,
+                        month,
+                        get_last_day_of_month(year, month),
+                    )
+                    .unwrap(),
                     chrono::NaiveTime::from_hms_opt(23, 59, 0).unwrap(),
                 ),
                 Utc,
