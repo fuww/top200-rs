@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            m.ticker,\n            m.name,\n            m.market_cap_original,\n            m.original_currency,\n            m.market_cap_eur,\n            m.market_cap_usd,\n            m.exchange,\n            m.active,\n            strftime('%s', m.timestamp) as timestamp,\n            td.description,\n            td.homepage_url,\n            td.employees\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "ticker",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "market_cap_original",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "original_currency",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "market_cap_eur",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "market_cap_usd",
+        "ordinal": 5,
+        "type_info": "Integer"
+      },
+      {
+        "name": "exchange",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "active",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "timestamp",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "description",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "homepage_url",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "employees",
+        "ordinal": 11,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "339a30e02ca1e89598dfcb961d8cf3a1a466a6c23ab6b6da3a6a7f4e06caf040"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n                            INSERT INTO market_caps (\n                                ticker, name, market_cap_original, original_currency,\n                                market_cap_eur, market_cap_usd, exchange, price,\n                                active, timestamp\n                            )\n                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n                            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "f51e2971492b5db08a63e1fa9e5ac5df67e60cc25cb196cefb6fde24d0803234"
+}
