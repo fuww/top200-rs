@@ -8,6 +8,7 @@ use crate::currencies::{convert_currency, get_rate_map_from_db};
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sqlx::sqlite::SqlitePool;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Fetches historical market caps for the last day of each month within the specified year range
@@ -28,6 +29,9 @@ pub async fn fetch_monthly_historical_marketcaps(
         "Fetching monthly historical market caps from {} to {}",
         start_year, end_year
     );
+
+    // Track last known market cap for each ticker
+    let mut last_known_caps: HashMap<String, f64> = HashMap::new();
 
     for year in start_year..=end_year {
         for month in 1..=12 {
@@ -51,6 +55,21 @@ pub async fn fetch_monthly_historical_marketcaps(
                     .await
                 {
                     Ok(market_cap) => {
+                        // Check if this is a repeated value
+                        if let Some(last_cap) = last_known_caps.get(ticker) {
+                            if *last_cap == market_cap.market_cap_original {
+                                eprintln!(
+                                    "Warning: Market cap for {} on {} is identical to previous value: {}",
+                                    ticker,
+                                    datetime_utc.format("%Y-%m-%d"),
+                                    market_cap.market_cap_original
+                                );
+                            }
+                        }
+
+                        // Update last known cap
+                        last_known_caps.insert(ticker.to_string(), market_cap.market_cap_original);
+
                         // Convert currencies if needed
                         let market_cap_eur = convert_currency(
                             market_cap.market_cap_original,

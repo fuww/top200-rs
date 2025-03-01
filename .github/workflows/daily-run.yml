@@ -37,7 +37,9 @@ jobs:
           nix \
             --extra-experimental-features "nix-command flakes" \
             develop \
-            --command bash -c "cargo build --release && ./target/release/top200-rs export-combined"
+            --command bash -c "cargo build --release && \
+                             ./target/release/top200-rs export-combined && \
+                             ./target/release/top200-rs export-monthly-comparison"
 
       - name: Upload CSV artifact
         uses: actions/upload-artifact@v4

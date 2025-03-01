@@ -305,3 +305,34 @@ pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    #[tokio::test]
+    async fn test_top_100_active_completeness() {
+        let pool = SqlitePool::connect(":memory:").await.unwrap();
+        export_top_100_active(&pool).await.unwrap();
+
+        let timestamp = Local::now().format("%Y%m%d_%H%M%S");
+        let filename = format!("output/top_100_active_{}.csv", timestamp);
+        let file = File::open(&filename).unwrap();
+        let reader = BufReader::new(file);
+
+        let mut lines = reader.lines();
+        let header = lines.next().unwrap().unwrap();
+        assert_eq!(header.split(',').count(), 13);
+
+        let mut count = 0;
+        for line in lines {
+            let record: Vec<String> = line.unwrap().split(',').map(|s| s.to_string()).collect();
+            assert_eq!(record[8], "true");
+            count += 1;
+        }
+
+        assert_eq!(count, 100);
+    }
+}
