@@ -139,6 +139,7 @@ sqlite3 data.db < tests/market_caps_totals_per_year.sql
 - `specific_date_marketcaps.rs`: Fetch market caps for specific dates
 - `ticker_details.rs`: Company details management
 - `utils.rs`: Common utilities and helpers
+- `visualizations.rs`: Generate beautiful SVG charts from comparison data
 
 ## Common Tasks
 
@@ -203,6 +204,28 @@ cargo run -- fetch-specific-date-market-caps $(date +%Y-%m-%d) && \
 cargo run -- compare-market-caps --from 2024-12-31 --to $(date +%Y-%m-%d)
 ```
 
+### Generating Visualization Charts
+
+```bash
+# Generate beautiful SVG charts from comparison data
+cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
+
+# This command will:
+# - Find the comparison CSV file for the specified dates
+# - Generate 4 professional visualization charts:
+#   1. Top Gainers and Losers bar chart (horizontal bars with gradient colors)
+#   2. Market Cap Distribution donut chart (shows top 10 companies + others)
+#   3. Rank Movements chart (shows biggest rank improvements and declines)
+#   4. Market Summary Dashboard (comprehensive overview with metrics and pie chart)
+# - Export all charts as SVG files to the output/ directory
+
+# Complete workflow example:
+cargo run -- fetch-specific-date-market-caps 2025-07-01 && \
+cargo run -- fetch-specific-date-market-caps 2025-08-01 && \
+cargo run -- compare-market-caps --from 2025-07-01 --to 2025-08-01 && \
+cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
+```
+
 ### Code Formatting
 
 After making code changes, always run the Rust formatter to ensure code style consistency:
@@ -239,6 +262,7 @@ The application supports these main commands:
 - `FetchMonthlyHistoricalMarketCaps` - Fetch historical monthly data
 - `fetch-specific-date-market-caps` - Fetch market caps for a specific date
 - `compare-market-caps` - Compare market caps between two dates
+- `generate-charts` - Generate visualization charts from comparison data
 - `ListCurrencies` - List all available currencies
 - `Details` - Fetch company details
 - `ReadConfig` - Display configuration

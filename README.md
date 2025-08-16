@@ -95,6 +95,31 @@ cargo run -- compare-market-caps --from 2025-07-01 --to 2025-08-01
 cargo run -- fetch-specific-date-market-caps 2024-12-31 && cargo run -- fetch-specific-date-market-caps $(date +%Y-%m-%d) && cargo run -- compare-market-caps --from 2024-12-31 --to $(date +%Y-%m-%d)
 ```
 
+Generate visualization charts from comparison data:
+
+```bash
+# Generate beautiful SVG charts from comparison data
+cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
+
+# This will create 4 professional visualization charts:
+# 1. Top Gainers and Losers bar chart
+# 2. Market Cap Distribution donut chart  
+# 3. Rank Movements chart
+# 4. Market Summary Dashboard
+
+# Output files:
+# - output/comparison_YYYY-MM-DD_to_YYYY-MM-DD_gainers_losers.svg
+# - output/comparison_YYYY-MM-DD_to_YYYY-MM-DD_market_distribution.svg
+# - output/comparison_YYYY-MM-DD_to_YYYY-MM-DD_rank_movements.svg
+# - output/comparison_YYYY-MM-DD_to_YYYY-MM-DD_summary_dashboard.svg
+
+# Complete workflow: fetch, compare, and visualize
+cargo run -- fetch-specific-date-market-caps 2025-07-01 && \
+cargo run -- fetch-specific-date-market-caps 2025-08-01 && \
+cargo run -- compare-market-caps --from 2025-07-01 --to 2025-08-01 && \
+cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
+```
+
 Export combined market cap report:
 
 ```bash

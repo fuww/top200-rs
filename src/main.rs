@@ -17,6 +17,7 @@ mod monthly_historical_marketcaps;
 mod specific_date_marketcaps;
 mod ticker_details;
 mod utils;
+mod visualizations;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -57,6 +58,13 @@ enum Commands {
     ListCurrencies,
     /// Compare market caps between two dates
     CompareMarketCaps {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+    },
+    /// Generate visualization charts from comparison data
+    GenerateCharts {
         #[arg(long)]
         from: String,
         #[arg(long)]
@@ -124,6 +132,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::CompareMarketCaps { from, to }) => {
             compare_marketcaps::compare_market_caps(&from, &to).await?;
+        }
+        Some(Commands::GenerateCharts { from, to }) => {
+            visualizations::generate_all_charts(&from, &to).await?;
         }
         None => {
             marketcaps::marketcaps(&pool).await?;
