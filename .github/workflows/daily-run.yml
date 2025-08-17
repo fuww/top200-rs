@@ -19,14 +19,14 @@ env:
   # Add your environment variables here
   FINANCIALMODELINGPREP_API_KEY: ${{ secrets.FINANCIALMODELINGPREP_API_KEY }}
   POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  DATABASE_URL: sqlite:data.db
   BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
   BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
   # Default sender name if BREVO_SENDER_NAME secret is not set
   BREVO_SENDER_NAME: ${{ secrets.BREVO_SENDER_NAME || 'Top200-RS Notifier' }}
 
 jobs:
-  collect-data:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -39,14 +39,57 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@main
       - uses: DeterminateSystems/flake-checker-action@main
 
-      - name: Build and run data collection
+      - name: Build release binary
         run: |
           nix \
             --extra-experimental-features "nix-command flakes" \
             develop \
-            --command bash -c "cargo build --release && ./target/release/top200-rs export-combined"
+            --command bash -c "cargo build --release"
 
-      - name: Upload CSV artifact
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: top200-rs-binary-${{ github.run_number }}
+          path: target/release/top200-rs
+          retention-days: 7
+
+  collect-data:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: true
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: top200-rs-binary-${{ github.run_number }}
+          path: ./
+
+      - name: Make binary executable
+        run: chmod +x ./top200-rs
+
+      - name: Fetch today's market data
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          echo "Fetching market data for today: $TODAY"
+          ./top200-rs fetch-specific-date-market-caps $TODAY
+
+      - name: Run export combined
+        run: ./top200-rs export-combined
+
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-${{ github.run_number }}
+          path: data.db
+          retention-days: 30
+
+      - name: Upload CSV artifacts
         uses: actions/upload-artifact@v4
         with:
           name: market-data-${{ github.run_number }}
@@ -54,14 +97,234 @@ jobs:
             output/*.csv
           retention-days: 90
 
+  compare-data:
+    needs: collect-data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: true
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: top200-rs-binary-${{ github.run_number }}
+          path: ./
+
+      - name: Download database artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: database-${{ github.run_number }}
+          path: ./
+
+      - name: Make binary executable
+        run: chmod +x ./top200-rs
+
+      - name: Calculate comparison dates
+        id: dates
+        run: |
+          # Get today's date
+          TODAY=$(date +%Y-%m-%d)
+          echo "TODAY=$TODAY" >> $GITHUB_OUTPUT
+          
+          # Calculate last month's date
+          # Handle edge cases: if today is 31st and last month only has 30 days (or 28/29 for Feb)
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+          
+          # Calculate previous month
+          if [ $MONTH -eq 1 ]; then
+            PREV_MONTH=12
+            PREV_YEAR=$((YEAR - 1))
+          else
+            PREV_MONTH=$((MONTH - 1))
+            PREV_YEAR=$YEAR
+          fi
+          
+          # Adjust day if it doesn't exist in previous month
+          # Days in month lookup
+          case $PREV_MONTH in
+            1|3|5|7|8|10|12)
+              DAYS_IN_PREV_MONTH=31
+              ;;
+            4|6|9|11)
+              DAYS_IN_PREV_MONTH=30
+              ;;
+            2)
+              # Check for leap year
+              if [ $((PREV_YEAR % 4)) -eq 0 ] && { [ $((PREV_YEAR % 100)) -ne 0 ] || [ $((PREV_YEAR % 400)) -eq 0 ]; }; then
+                DAYS_IN_PREV_MONTH=29
+              else
+                DAYS_IN_PREV_MONTH=28
+              fi
+              ;;
+          esac
+          
+          # Adjust day if necessary
+          if [ $DAY -gt $DAYS_IN_PREV_MONTH ]; then
+            PREV_DAY=$DAYS_IN_PREV_MONTH
+          else
+            PREV_DAY=$DAY
+          fi
+          
+          # Format the date with leading zeros
+          LAST_MONTH=$(printf "%04d-%02d-%02d" $PREV_YEAR $PREV_MONTH $PREV_DAY)
+          echo "LAST_MONTH=$LAST_MONTH" >> $GITHUB_OUTPUT
+          
+          echo "Comparison dates: $LAST_MONTH to $TODAY"
+
+      - name: Fetch last month's data
+        run: |
+          echo "Fetching market data for: ${{ steps.dates.outputs.LAST_MONTH }}"
+          ./top200-rs fetch-specific-date-market-caps ${{ steps.dates.outputs.LAST_MONTH }}
+
+      - name: Compare market caps
+        run: |
+          echo "Comparing market caps from ${{ steps.dates.outputs.LAST_MONTH }} to ${{ steps.dates.outputs.TODAY }}"
+          ./top200-rs compare-market-caps --from ${{ steps.dates.outputs.LAST_MONTH }} --to ${{ steps.dates.outputs.TODAY }}
+
+      - name: Upload comparison artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: comparison-${{ github.run_number }}
+          path: |
+            output/comparison_*.csv
+            output/comparison_*.md
+          retention-days: 90
+
+  generate-visualizations:
+    needs: compare-data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: true
+
+      - name: Download binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: top200-rs-binary-${{ github.run_number }}
+          path: ./
+
+      - name: Download database artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: database-${{ github.run_number }}
+          path: ./
+
+      - name: Download comparison artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comparison-${{ github.run_number }}
+          path: ./output
+
+      - name: Make binary executable
+        run: chmod +x ./top200-rs
+
+      - name: Calculate dates for visualization
+        id: dates
+        run: |
+          # Reuse the same date calculation logic
+          TODAY=$(date +%Y-%m-%d)
+          YEAR=$(date +%Y)
+          MONTH=$(date +%m)
+          DAY=$(date +%d)
+          
+          if [ $MONTH -eq 1 ]; then
+            PREV_MONTH=12
+            PREV_YEAR=$((YEAR - 1))
+          else
+            PREV_MONTH=$((MONTH - 1))
+            PREV_YEAR=$YEAR
+          fi
+          
+          case $PREV_MONTH in
+            1|3|5|7|8|10|12)
+              DAYS_IN_PREV_MONTH=31
+              ;;
+            4|6|9|11)
+              DAYS_IN_PREV_MONTH=30
+              ;;
+            2)
+              if [ $((PREV_YEAR % 4)) -eq 0 ] && { [ $((PREV_YEAR % 100)) -ne 0 ] || [ $((PREV_YEAR % 400)) -eq 0 ]; }; then
+                DAYS_IN_PREV_MONTH=29
+              else
+                DAYS_IN_PREV_MONTH=28
+              fi
+              ;;
+          esac
+          
+          if [ $DAY -gt $DAYS_IN_PREV_MONTH ]; then
+            PREV_DAY=$DAYS_IN_PREV_MONTH
+          else
+            PREV_DAY=$DAY
+          fi
+          
+          LAST_MONTH=$(printf "%04d-%02d-%02d" $PREV_YEAR $PREV_MONTH $PREV_DAY)
+          
+          echo "TODAY=$TODAY" >> $GITHUB_OUTPUT
+          echo "LAST_MONTH=$LAST_MONTH" >> $GITHUB_OUTPUT
+
+      - name: Generate visualization charts
+        run: |
+          echo "Generating charts for comparison from ${{ steps.dates.outputs.LAST_MONTH }} to ${{ steps.dates.outputs.TODAY }}"
+          ./top200-rs generate-charts --from ${{ steps.dates.outputs.LAST_MONTH }} --to ${{ steps.dates.outputs.TODAY }}
+
+      - name: Upload visualization artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: visualizations-${{ github.run_number }}
+          path: |
+            output/*.svg
+          retention-days: 90
+
+  notify:
+    needs: [collect-data, compare-data, generate-visualizations]
+    runs-on: ubuntu-latest
+    if: always() # Run notification regardless of previous job status
+    permissions:
+      contents: read
+    steps:
+      - name: Check job statuses
+        id: status
+        run: |
+          if [ "${{ needs.collect-data.result }}" == "success" ] && \
+             [ "${{ needs.compare-data.result }}" == "success" ] && \
+             [ "${{ needs.generate-visualizations.result }}" == "success" ]; then
+            echo "STATUS=success" >> $GITHUB_OUTPUT
+            echo "All jobs completed successfully"
+          else
+            echo "STATUS=failure" >> $GITHUB_OUTPUT
+            echo "One or more jobs failed"
+            echo "Data collection: ${{ needs.collect-data.result }}"
+            echo "Comparison: ${{ needs.compare-data.result }}"
+            echo "Visualizations: ${{ needs.generate-visualizations.result }}"
+          fi
+
       - name: Send Email Notification via Brevo API
-        if: success() # Only run if previous steps were successful
+        if: needs.collect-data.result == 'success' # Only send if at least data collection succeeded
         env:
           RECIPIENT_EMAIL: 'joost@fashionunited.com'
-          EMAIL_SUBJECT: "Daily Data Collection Successful - Run #${{ github.run_number }}"
+          EMAIL_SUBJECT: "Daily Data Collection - Run #${{ github.run_number }} - ${{ steps.status.outputs.STATUS }}"
           GITHUB_RUN_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         run: |
           echo "Preparing email notification..."
+          
+          if [ "${{ steps.status.outputs.STATUS }}" == "success" ]; then
+            STATUS_MESSAGE="All jobs completed successfully"
+            STATUS_COLOR="#28a745"
+          else
+            STATUS_MESSAGE="Some jobs encountered issues"
+            STATUS_COLOR="#dc3545"
+          fi
+          
           JSON_PAYLOAD=$(cat <<EOF
           {
             "sender": {
@@ -74,7 +337,18 @@ jobs:
               }
             ],
             "subject": "${EMAIL_SUBJECT}",
-            "htmlContent": "<html><body><p>The daily data collection job for Top200-RS has finished successfully.</p><p>View artifacts for run #${{ github.run_number }} here: <a href=\"${GITHUB_RUN_URL}\">${GITHUB_RUN_URL}</a></p><p>Commit: ${{ github.sha }}</p></body></html>"
+            "htmlContent": "<html><body>
+              <h2 style=\"color: ${STATUS_COLOR};\">${STATUS_MESSAGE}</h2>
+              <p>The daily data collection workflow for Top200-RS has completed.</p>
+              <h3>Job Results:</h3>
+              <ul>
+                <li>Data Collection: ${{ needs.collect-data.result }}</li>
+                <li>Comparison: ${{ needs.compare-data.result }}</li>
+                <li>Visualizations: ${{ needs.generate-visualizations.result }}</li>
+              </ul>
+              <p>View run details and artifacts: <a href=\"${GITHUB_RUN_URL}\">${GITHUB_RUN_URL}</a></p>
+              <p>Commit: ${{ github.sha }}</p>
+            </body></html>"
           }
           EOF
           )
@@ -91,7 +365,5 @@ jobs:
             echo "Email notification sent successfully."
           else
             echo "Failed to send email notification. Response code: ${RESPONSE_CODE}"
-            # Optionally, you could output the actual response if you didn't use -o /dev/null for debugging
-            # For now, we just indicate failure based on HTTP code.
-            exit 1 # Mark the step as failed if email sending fails
+            exit 1
           fi
