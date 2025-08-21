@@ -66,7 +66,7 @@ jobs:
       - name: Send Email Notification via Brevo API
         if: success() # Only run if previous steps were successful
         env:
-          RECIPIENT_EMAIL: 'joost@fashionunited.com'
+          RECIPIENT_EMAIL: 'lennard@fashionunited.com'
           EMAIL_SUBJECT: "Daily Specific Date Market Caps - ${{ steps.get-date.outputs.today }} - Run #${{ github.run_number }}"
           GITHUB_RUN_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         run: |
