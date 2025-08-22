@@ -1,0 +1,90 @@
+# SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# GitHub Copilot ignore file
+# Excludes files and directories from GitHub Copilot's context to improve performance
+# and prevent sensitive/irrelevant content from being processed
+
+# Build artifacts and dependencies
+target/
+debug/
+Cargo.lock
+*.rs.bk
+*.pdb
+
+# Data files - exclude sensitive financial data from Copilot context
+data.db
+data.db-*
+*.sqlite
+*.db
+
+# Output and generated files
+output/
+coverage/
+tmp/
+.cache/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/settings.json
+.DS_Store
+
+# Git and version control
+.git/
+.gitconfig
+.githooks/
+
+# License files (contain legal text, not code)
+LICENSES/
+LICENSE
+*.license
+
+# Large data files
+*.csv
+*.json.gz
+*.tar.gz
+*.zip
+
+# Log files
+*.log
+logs/
+
+# Documentation that doesn't need code context
+docs/generated/
+*.pdf
+
+# Temporary files
+*~
+*.tmp
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+*.DS_Store
+
+# Backup files
+*.backup
+*.bak
+
+# Nix/development environment (system-specific)
+.direnv/
+.direnv
+flake.lock
+result
+result-*
+
+# Certificate files
+certs/
+*.pem
+*.key
+*.crt
+
+# Migration files with sensitive schema info
+migrations/*.sql
