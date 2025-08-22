@@ -24,5 +24,31 @@
             "name": "top200"
         }
     ],
-    "sqltools.useNodeRuntime": true
+    "sqltools.useNodeRuntime": true,
+    "github.copilot.enable": {
+        "*": true,
+        "rust": true,
+        "toml": true,
+        "sql": true,
+        "markdown": true,
+        "yaml": true,
+        "json": true
+    },
+    "github.copilot.editor.enableAutoCompletions": true,
+    "github.copilot.advanced": {
+        "inlineSuggestEnable": true,
+        "listCount": 10,
+        "length": 500,
+        "debug.overrideEngine": "copilot",
+        "debug.testOverrideProxyUrl": "",
+        "debug.showScores": false
+    },
+    "editor.inlineSuggest.enabled": true,
+    "editor.suggestSelection": "first",
+    "editor.suggest.preview": true,
+    "editor.acceptSuggestionOnCommitCharacter": false,
+    "editor.acceptSuggestionOnEnter": "on",
+    "rust-analyzer.completion.autoimport.enable": true,
+    "rust-analyzer.completion.autoself.enable": true,
+    "rust-analyzer.completion.postfix.enable": true
 }

@@ -290,3 +290,5 @@ The application supports these main commands:
 - `ListCurrencies` - List all available currencies
 - `Details` - Fetch company details
 - `ReadConfig` - Display configuration
+
+

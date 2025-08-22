@@ -1,8 +1,14 @@
 {
   "recommendations": [
+    "github.copilot",
+    "github.copilot-chat",
+    "rust-lang.rust-analyzer",
+    "vadimcn.vscode-lldb",
     "dbaeumer.vscode-eslint",
     "esbenp.prettier-vscode",
     "ms-vscode-remote.remote-containers",
-    "eamodio.gitlens"
+    "eamodio.gitlens",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-sqlite"
   ]
 }
