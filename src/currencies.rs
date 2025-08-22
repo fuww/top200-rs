@@ -240,6 +240,101 @@ pub async fn update_currencies(fmp_client: &FMPClient, pool: &SqlitePool) -> Res
     Ok(())
 }
 
+/// Get exchange rate info used for currency conversion
+/// Returns the currency pair, exchange rate, and timestamp for a conversion from one currency to another
+pub async fn get_conversion_rate_info(
+    pool: &SqlitePool,
+    from_currency: &str,
+    to_currency: &str,
+    at_timestamp: i64,
+) -> Result<Option<(String, f64, i64)>> {
+    // Handle special cases for currency subunits and alternative codes (same as convert_currency)
+    let adjusted_from_currency = match from_currency {
+        "GBp" => "GBP", // Convert pence to pounds
+        "ZAc" => "ZAR",
+        "ILA" => "ILS",
+        _ => from_currency,
+    };
+
+    let adjusted_to_currency = match to_currency {
+        "GBp" => "GBP",
+        "ZAc" => "ZAR",
+        "ILA" => "ILS",
+        _ => to_currency,
+    };
+
+    if adjusted_from_currency == adjusted_to_currency {
+        return Ok(Some((
+            format!("{}/{}", adjusted_from_currency, adjusted_to_currency),
+            1.0,
+            at_timestamp,
+        )));
+    }
+
+    // Try direct conversion first
+    let direct_pair = format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
+    if let Some(rate_info) = get_forex_rate_at_timestamp(pool, &direct_pair, at_timestamp).await? {
+        return Ok(Some((direct_pair, rate_info.0, rate_info.2)));
+    }
+
+    // Try reverse rate
+    let reverse_pair = format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
+    if let Some(rate_info) = get_forex_rate_at_timestamp(pool, &reverse_pair, at_timestamp).await? {
+        return Ok(Some((reverse_pair, 1.0 / rate_info.0, rate_info.2)));
+    }
+
+    // Try conversion through intermediate currencies - find most recent path
+    let symbols = list_forex_symbols(pool).await?;
+    for symbol in symbols {
+        if let Some((from1, to1)) = symbol.split_once('/') {
+            if from1 == adjusted_from_currency {
+                let second_leg = format!("{}/{}", to1, adjusted_to_currency);
+                if let Some(rate1_info) =
+                    get_forex_rate_at_timestamp(pool, &symbol, at_timestamp).await?
+                {
+                    if let Some(rate2_info) =
+                        get_forex_rate_at_timestamp(pool, &second_leg, at_timestamp).await?
+                    {
+                        let combined_rate = rate1_info.0 * rate2_info.0;
+                        let combined_pair = format!(
+                            "{}/{} (via {})",
+                            adjusted_from_currency, adjusted_to_currency, to1
+                        );
+                        // Use the more recent timestamp
+                        let timestamp = rate1_info.2.max(rate2_info.2);
+                        return Ok(Some((combined_pair, combined_rate, timestamp)));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+/// Get forex rate at or before a specific timestamp
+async fn get_forex_rate_at_timestamp(
+    pool: &SqlitePool,
+    symbol: &str,
+    at_timestamp: i64,
+) -> Result<Option<(f64, f64, i64)>> {
+    let record = sqlx::query_as::<_, (f64, f64, i64)>(
+        r#"
+        SELECT ask, bid, timestamp
+        FROM forex_rates
+        WHERE symbol = ? AND timestamp <= ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(symbol)
+    .bind(at_timestamp)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
