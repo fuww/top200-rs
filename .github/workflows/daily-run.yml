@@ -65,6 +65,16 @@ jobs:
         run: |
           echo "Preparing email notification..."
           
+          # Validate email configuration before attempting to send
+          if [ -z "${BREVO_API_KEY}" ] || [ -z "${BREVO_SENDER_EMAIL}" ] || [ -z "${NOTIFICATION_RECIPIENTS}" ]; then
+            echo "Error: Email configuration is incomplete."
+            echo "Required: BREVO_API_KEY, BREVO_SENDER_EMAIL, NOTIFICATION_RECIPIENTS"
+            echo "BREVO_API_KEY: $([ -n "${BREVO_API_KEY}" ] && echo "configured" || echo "missing")"
+            echo "BREVO_SENDER_EMAIL: $([ -n "${BREVO_SENDER_EMAIL}" ] && echo "configured" || echo "missing")"
+            echo "NOTIFICATION_RECIPIENTS: $([ -n "${NOTIFICATION_RECIPIENTS}" ] && echo "configured" || echo "missing")"
+            exit 1
+          fi
+          
           # Parse recipients from environment variable (comma-separated)
           IFS=',' read -ra RECIPIENTS <<< "$NOTIFICATION_RECIPIENTS"
           
@@ -95,18 +105,27 @@ jobs:
           )
 
           echo "Sending email..."
-          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://api.brevo.com/v3/smtp/email \
+          echo "Sender email: ${BREVO_SENDER_EMAIL}"
+          echo "Sender name: ${BREVO_SENDER_NAME}"
+          
+          # Send request and capture both response code and body
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST https://api.brevo.com/v3/smtp/email \
             -H "accept: application/json" \
             -H "api-key: ${BREVO_API_KEY}" \
             -H "content-type: application/json" \
             -d "${JSON_PAYLOAD}")
+          
+          # Extract response code from the last line
+          RESPONSE_CODE=$(echo "$RESPONSE" | tail -n 1)
+          # Extract response body (all lines except the last)
+          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
 
           echo "Brevo API response code: ${RESPONSE_CODE}"
           if [ "${RESPONSE_CODE}" -eq 201 ]; then
             echo "Email notification sent successfully."
           else
             echo "Failed to send email notification. Response code: ${RESPONSE_CODE}"
-            # Optionally, you could output the actual response if you didn't use -o /dev/null for debugging
-            # For now, we just indicate failure based on HTTP code.
+            echo "Response body: ${RESPONSE_BODY}"
+            echo "Error: Email notification failed. This indicates a configuration issue."
             exit 1 # Mark the step as failed if email sending fails
           fi
