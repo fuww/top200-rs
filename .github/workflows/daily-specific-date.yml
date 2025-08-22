@@ -26,7 +26,7 @@ env:
   # Default sender name if BREVO_SENDER_NAME is not set
   BREVO_SENDER_NAME: ${{ vars.BREVO_SENDER_NAME || 'Top200-RS Notifier' }}
   # Email recipients (comma-separated list)
-  NOTIFICATION_RECIPIENTS: ${{ secrets.NOTIFICATION_RECIPIENTS || vars.NOTIFICATION_RECIPIENTS || 'lennard@fashionunited.com' }}
+  NOTIFICATION_RECIPIENTS: ${{ secrets.NOTIFICATION_RECIPIENTS || vars.NOTIFICATION_RECIPIENTS || 'it@fashionunited.com' }}
 
 jobs:
   collect-specific-date-data:
