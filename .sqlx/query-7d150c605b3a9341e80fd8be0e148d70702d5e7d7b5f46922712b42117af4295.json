@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            INSERT INTO symbol_changes (old_symbol, new_symbol, change_date, company_name, reason)\n            VALUES (?, ?, ?, ?, ?)\n            ON CONFLICT(old_symbol, new_symbol, change_date) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "7d150c605b3a9341e80fd8be0e148d70702d5e7d7b5f46922712b42117af4295"
+}
