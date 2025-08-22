@@ -74,6 +74,16 @@ jobs:
         run: |
           echo "Preparing email notification..."
           
+          # Validate email configuration before attempting to send
+          if [ -z "${BREVO_API_KEY}" ] || [ -z "${BREVO_SENDER_EMAIL}" ] || [ -z "${NOTIFICATION_RECIPIENTS}" ]; then
+            echo "Error: Email configuration is incomplete."
+            echo "Required: BREVO_API_KEY, BREVO_SENDER_EMAIL, NOTIFICATION_RECIPIENTS"
+            echo "BREVO_API_KEY: $([ -n "${BREVO_API_KEY}" ] && echo "configured" || echo "missing")"
+            echo "BREVO_SENDER_EMAIL: $([ -n "${BREVO_SENDER_EMAIL}" ] && echo "configured" || echo "missing")"
+            echo "NOTIFICATION_RECIPIENTS: $([ -n "${NOTIFICATION_RECIPIENTS}" ] && echo "configured" || echo "missing")"
+            exit 1
+          fi
+          
           # Parse recipients from environment variable (comma-separated)
           IFS=',' read -ra RECIPIENTS <<< "$NOTIFICATION_RECIPIENTS"
           
@@ -125,7 +135,6 @@ jobs:
           else
             echo "Failed to send email notification. Response code: ${RESPONSE_CODE}"
             echo "Response body: ${RESPONSE_BODY}"
-            # Continue execution even if email fails (remove exit 1)
-            # This prevents the workflow from failing just because of email issues
-            echo "Warning: Email notification failed, but workflow continues."
+            echo "Error: Email notification failed. This indicates a configuration issue."
+            exit 1 # Fail the workflow when email sending fails
           fi
