@@ -78,17 +78,9 @@ pub async fn get_rate_map_from_db(pool: &SqlitePool) -> Result<HashMap<String, f
     Ok(rate_map)
 }
 
-/// Convert an amount from one currency to another using the rate map
-pub fn convert_currency(
-    amount: f64,
-    from_currency: &str,
-    to_currency: &str,
-    rate_map: &HashMap<String, f64>,
-) -> f64 {
-    if from_currency == to_currency {
-        return amount;
-    }
-
+/// Adjust currency codes and amounts for subunits and alternative codes
+/// Returns (adjusted_amount, adjusted_from_currency, adjusted_to_currency)
+fn adjust_currencies(amount: f64, from_currency: &str, to_currency: &str) -> (f64, &str, &str) {
     // Handle special cases for currency subunits and alternative codes
     let (adjusted_amount, adjusted_from_currency) = match from_currency {
         "GBp" => (amount / 100.0, "GBP"), // Convert pence to pounds
@@ -104,6 +96,27 @@ pub fn convert_currency(
         "ILA" => "ILS",
         _ => to_currency,
     };
+
+    (
+        adjusted_amount,
+        adjusted_from_currency,
+        adjusted_to_currency,
+    )
+}
+
+/// Convert an amount from one currency to another using the rate map
+pub fn convert_currency(
+    amount: f64,
+    from_currency: &str,
+    to_currency: &str,
+    rate_map: &HashMap<String, f64>,
+) -> f64 {
+    if from_currency == to_currency {
+        return amount;
+    }
+
+    let (adjusted_amount, adjusted_from_currency, adjusted_to_currency) =
+        adjust_currencies(amount, from_currency, to_currency);
 
     // Try direct conversion first
     let direct_rate = format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
@@ -248,20 +261,9 @@ pub async fn get_conversion_rate_info(
     to_currency: &str,
     at_timestamp: i64,
 ) -> Result<Option<(String, f64, i64)>> {
-    // Handle special cases for currency subunits and alternative codes (same as convert_currency)
-    let adjusted_from_currency = match from_currency {
-        "GBp" => "GBP", // Convert pence to pounds
-        "ZAc" => "ZAR",
-        "ILA" => "ILS",
-        _ => from_currency,
-    };
-
-    let adjusted_to_currency = match to_currency {
-        "GBp" => "GBP",
-        "ZAc" => "ZAR",
-        "ILA" => "ILS",
-        _ => to_currency,
-    };
+    // Use shared currency adjustment logic
+    let (_, adjusted_from_currency, adjusted_to_currency) =
+        adjust_currencies(0.0, from_currency, to_currency);
 
     if adjusted_from_currency == adjusted_to_currency {
         return Ok(Some((
@@ -277,10 +279,10 @@ pub async fn get_conversion_rate_info(
         return Ok(Some((direct_pair, rate_info.0, rate_info.2)));
     }
 
-    // Try reverse rate
+    // Try reverse rate - return the requested pair name, not the database pair name
     let reverse_pair = format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
     if let Some(rate_info) = get_forex_rate_at_timestamp(pool, &reverse_pair, at_timestamp).await? {
-        return Ok(Some((reverse_pair, 1.0 / rate_info.0, rate_info.2)));
+        return Ok(Some((direct_pair, 1.0 / rate_info.0, rate_info.2)));
     }
 
     // Try conversion through intermediate currencies - find most recent path
@@ -602,5 +604,166 @@ mod tests {
         assert!(currencies.iter().any(|(c, _)| c == "ABC"));
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_direct_rate() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert test forex rate
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956301).await?;
+
+        // Test direct rate lookup
+        let result = get_conversion_rate_info(&pool, "EUR", "USD", 1701956301).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "EUR/USD");
+        assert_relative_eq!(rate, 1.08, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956301);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_reverse_rate() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert test forex rate (only EUR/USD in database)
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956301).await?;
+
+        // Test reverse rate lookup (request USD/EUR, but only EUR/USD exists)
+        let result = get_conversion_rate_info(&pool, "USD", "EUR", 1701956301).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+
+        // Should return the requested pair name "USD/EUR", not the database pair "EUR/USD"
+        assert_eq!(pair, "USD/EUR");
+        assert_relative_eq!(rate, 1.0 / 1.08, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956301);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_same_currency() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        let test_timestamp = 1701956301;
+        let result = get_conversion_rate_info(&pool, "EUR", "EUR", test_timestamp).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "EUR/EUR");
+        assert_relative_eq!(rate, 1.0, epsilon = 0.00001);
+        assert_eq!(timestamp, test_timestamp);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_currency_subunits() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert GBP/USD rate (not GBp/USD)
+        insert_forex_rate(&pool, "GBP/USD", 1.25, 1.25, 1701956301).await?;
+
+        // Test GBp (pence) conversion - should use GBP internally
+        let result = get_conversion_rate_info(&pool, "GBp", "USD", 1701956301).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "GBP/USD"); // Should show adjusted currency
+        assert_relative_eq!(rate, 1.25, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956301);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_cross_currency() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert rates for cross-currency conversion JPY -> EUR via USD
+        insert_forex_rate(&pool, "JPY/USD", 0.00675, 0.00675, 1701956301).await?;
+        insert_forex_rate(&pool, "USD/EUR", 0.925, 0.925, 1701956302).await?;
+
+        let result = get_conversion_rate_info(&pool, "JPY", "EUR", 1701956302).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "JPY/EUR (via USD)");
+        assert_relative_eq!(rate, 0.00675 * 0.925, epsilon = 0.00001);
+        assert_eq!(timestamp, 1701956302); // Should use more recent timestamp
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_timestamp_filtering() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert rates at different timestamps
+        insert_forex_rate(&pool, "EUR/USD", 1.05, 1.05, 1701956200).await?; // Earlier
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956300).await?; // Later
+
+        // Should get the earlier rate when querying at that timestamp
+        let result = get_conversion_rate_info(&pool, "EUR", "USD", 1701956250).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "EUR/USD");
+        assert_relative_eq!(rate, 1.05, epsilon = 0.00001); // Should get earlier rate
+        assert_eq!(timestamp, 1701956200);
+
+        // Should get the later rate when querying after that timestamp
+        let result = get_conversion_rate_info(&pool, "EUR", "USD", 1701956350).await?;
+        assert!(result.is_some());
+        let (pair, rate, timestamp) = result.unwrap();
+        assert_eq!(pair, "EUR/USD");
+        assert_relative_eq!(rate, 1.08, epsilon = 0.00001); // Should get later rate
+        assert_eq!(timestamp, 1701956300);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_conversion_rate_info_missing_rate() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // No forex rates in database
+        let result = get_conversion_rate_info(&pool, "EUR", "USD", 1701956301).await?;
+        assert!(result.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_adjust_currencies_helper() {
+        // Test GBp adjustment
+        let (amount, from, to) = adjust_currencies(100.0, "GBp", "USD");
+        assert_relative_eq!(amount, 1.0, epsilon = 0.00001); // 100 pence = 1 pound
+        assert_eq!(from, "GBP");
+        assert_eq!(to, "USD");
+
+        // Test ZAc adjustment
+        let (amount, from, to) = adjust_currencies(200.0, "ZAc", "EUR");
+        assert_relative_eq!(amount, 2.0, epsilon = 0.00001); // 200 cents = 2 rand
+        assert_eq!(from, "ZAR");
+        assert_eq!(to, "EUR");
+
+        // Test ILA adjustment
+        let (amount, from, to) = adjust_currencies(100.0, "ILA", "USD");
+        assert_relative_eq!(amount, 100.0, epsilon = 0.00001);
+        assert_eq!(from, "ILS");
+        assert_eq!(to, "USD");
+
+        // Test normal currencies (no adjustment)
+        let (amount, from, to) = adjust_currencies(100.0, "EUR", "USD");
+        assert_relative_eq!(amount, 100.0, epsilon = 0.00001);
+        assert_eq!(from, "EUR");
+        assert_eq!(to, "USD");
     }
 }
