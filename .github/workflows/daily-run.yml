@@ -24,6 +24,8 @@ env:
   BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
   # Default sender name if BREVO_SENDER_NAME secret is not set
   BREVO_SENDER_NAME: ${{ secrets.BREVO_SENDER_NAME || 'Top200-RS Notifier' }}
+  # Email recipients (comma-separated list)
+  NOTIFICATION_RECIPIENTS: ${{ secrets.NOTIFICATION_RECIPIENTS || vars.NOTIFICATION_RECIPIENTS || 'joost@fashionunited.com' }}
 
 jobs:
   collect-data:
@@ -57,24 +59,37 @@ jobs:
       - name: Send Email Notification via Brevo API
         if: success() # Only run if previous steps were successful
         env:
-          RECIPIENT_EMAIL: 'joost@fashionunited.com'
           EMAIL_SUBJECT: "Daily Data Collection Successful - Run #${{ github.run_number }}"
           GITHUB_RUN_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ARTIFACT_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
         run: |
           echo "Preparing email notification..."
+          
+          # Parse recipients from environment variable (comma-separated)
+          IFS=',' read -ra RECIPIENTS <<< "$NOTIFICATION_RECIPIENTS"
+          
+          # Build recipients JSON array
+          RECIPIENTS_JSON="["
+          for i in "${!RECIPIENTS[@]}"; do
+            email=$(echo "${RECIPIENTS[$i]}" | xargs) # trim whitespace
+            if [ $i -gt 0 ]; then
+              RECIPIENTS_JSON+=","
+            fi
+            RECIPIENTS_JSON+="{\"email\":\"$email\"}"
+          done
+          RECIPIENTS_JSON+="]"
+          
+          echo "Recipients JSON: $RECIPIENTS_JSON"
+          
           JSON_PAYLOAD=$(cat <<EOF
           {
             "sender": {
               "name": "${BREVO_SENDER_NAME}",
               "email": "${BREVO_SENDER_EMAIL}"
             },
-            "to": [
-              {
-                "email": "${RECIPIENT_EMAIL}"
-              }
-            ],
+            "to": $RECIPIENTS_JSON,
             "subject": "${EMAIL_SUBJECT}",
-            "htmlContent": "<html><body><p>The daily data collection job for Top200-RS has finished successfully.</p><p>View artifacts for run #${{ github.run_number }} here: <a href=\"${GITHUB_RUN_URL}\">${GITHUB_RUN_URL}</a></p><p>Commit: ${{ github.sha }}</p></body></html>"
+            "htmlContent": "<html><body><p>The daily data collection job for Top200-RS has finished successfully.</p><p><strong>Run Details:</strong></p><ul><li>Run Number: #${{ github.run_number }}</li><li>Commit: ${{ github.sha }}</li><li>Workflow URL: <a href=\"${GITHUB_RUN_URL}\">${GITHUB_RUN_URL}</a></li><li>Download Artifacts: <a href=\"${ARTIFACT_URL}\">View and Download Artifacts</a></li></ul><p>The generated CSV files are available as artifacts in the workflow run.</p></body></html>"
           }
           EOF
           )

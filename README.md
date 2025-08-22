@@ -162,6 +162,45 @@ cargo run -- fetch-monthly-historical-market-caps 2023 2025
 
 The application stores all data in a SQLite database (`data.db`). You can browse and query this database using the `sqlite3` command-line tool.
 
+## Email Notifications
+
+The GitHub workflows can send email notifications when data collection jobs complete successfully. This is useful for staying informed about daily market cap updates.
+
+### Configuration
+
+Email notifications are configured through environment variables:
+
+```env
+# Required for email functionality
+BREVO_API_KEY=your_brevo_api_key_here
+BREVO_SENDER_EMAIL=noreply@example.com
+NOTIFICATION_RECIPIENTS=user1@example.com,user2@example.com
+
+# Optional
+BREVO_SENDER_NAME=Top200-RS Notifier
+```
+
+### Features
+
+- **Multiple Recipients**: Send notifications to multiple email addresses (comma-separated)
+- **Artifact Links**: Each email includes direct links to download generated CSV files
+- **Run Details**: Workflow information, commit SHA, and timestamps
+- **Fallback Support**: Maintains backward compatibility with existing setups
+
+### GitHub Configuration
+
+Set these in your repository's Settings > Secrets and variables:
+
+**Secrets:**
+- `BREVO_API_KEY`: Your Brevo transactional email API key
+- `NOTIFICATION_RECIPIENTS`: Comma-separated list of email addresses
+
+**Variables:**
+- `BREVO_SENDER_EMAIL`: Email address to send from
+- `BREVO_SENDER_NAME`: Display name for notifications
+
+See [docs/email-notifications.md](docs/email-notifications.md) for detailed configuration instructions.
+
 #### Basic Database Commands
 
 ```bash
