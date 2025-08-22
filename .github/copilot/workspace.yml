@@ -1,0 +1,69 @@
+# SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# GitHub Copilot Workspace Configuration
+# This file provides context to GitHub Copilot about the project structure and conventions
+
+project_type: rust_cli_application
+domain: financial_data_tracking
+
+# Project overview
+description: |
+  A Rust application that tracks and analyzes market capitalization data for top companies.
+  Fetches data from financial APIs, stores it in SQLite, and provides various commands
+  for analysis and export.
+
+# Key patterns to follow
+conventions:
+  error_handling: "Use anyhow::Result for error propagation"
+  async_patterns: "Use tokio for async operations with proper error handling"
+  database: "SQLx with SQLite for data persistence"
+  cli: "clap for command-line argument parsing"
+  data_formats: "CSV exports, JSON for API communication"
+  
+# Important modules and their purposes
+modules:
+  - name: "api.rs"
+    purpose: "API client abstraction with rate limiting"
+  - name: "marketcaps.rs" 
+    purpose: "Core market cap data fetching and processing"
+  - name: "models.rs"
+    purpose: "Data structures for companies, exchange rates, financial data"
+  - name: "compare_marketcaps.rs"
+    purpose: "Market cap comparison analytics between dates"
+  - name: "visualizations.rs"
+    purpose: "SVG chart generation for market data"
+  - name: "currencies.rs"
+    purpose: "Currency and exchange rate management"
+  - name: "db.rs"
+    purpose: "Database connection and migration handling"
+
+# Development guidelines
+guidelines:
+  - "Always handle currency conversion properly in financial calculations"
+  - "Use proper progress bars for long-running operations (indicatif crate)"
+  - "Follow existing patterns for CLI subcommands in main.rs"
+  - "Include comprehensive error messages with context"
+  - "Use SQLx compile-time checked queries where possible"
+  - "Implement proper rate limiting for API calls (300 req/min for FMP)"
+  - "Export data in consistent CSV format with timestamps"
+  - "Use chrono for date/time handling in financial contexts"
+
+# Testing patterns
+testing:
+  - "Use tempfile for database tests that need isolation"
+  - "Mock API responses for reliable testing"
+  - "Test currency conversion edge cases"
+  - "Validate CSV output formats"
+  - "Use approx crate for floating-point comparisons in financial calculations"
+
+# Common tasks developers work on
+common_tasks:
+  - "Adding new CLI subcommands"
+  - "Implementing new data export formats"
+  - "Adding support for new financial APIs"
+  - "Creating market analysis features"
+  - "Optimizing database queries"
+  - "Adding visualization features"
+  - "Handling new ticker symbol changes"
