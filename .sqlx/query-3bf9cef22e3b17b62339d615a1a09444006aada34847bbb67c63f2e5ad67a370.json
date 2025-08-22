@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE symbol_changes SET applied = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3bf9cef22e3b17b62339d615a1a09444006aada34847bbb67c63f2e5ad67a370"
+}

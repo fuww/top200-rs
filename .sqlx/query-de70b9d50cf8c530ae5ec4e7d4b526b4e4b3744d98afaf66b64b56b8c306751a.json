@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            id as \"id?\",\n            old_symbol,\n            new_symbol,\n            change_date,\n            company_name,\n            reason,\n            applied as \"applied!\"\n        FROM symbol_changes\n        WHERE applied = 0\n        ORDER BY change_date DESC, old_symbol\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id?",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "old_symbol",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "new_symbol",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "change_date",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "company_name",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "reason",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "applied!",
+        "ordinal": 6,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "de70b9d50cf8c530ae5ec4e7d4b526b4e4b3744d98afaf66b64b56b8c306751a"
+}

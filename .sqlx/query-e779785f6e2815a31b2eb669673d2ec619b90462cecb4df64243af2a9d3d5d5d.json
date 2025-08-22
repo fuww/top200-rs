@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT\n            m.ticker as \"ticker!\",\n            m.name as \"name!\",\n            CAST(m.market_cap_original AS REAL) as market_cap_original,\n            m.original_currency,\n            CAST(m.market_cap_eur AS REAL) as market_cap_eur,\n            CAST(m.market_cap_usd AS REAL) as market_cap_usd,\n            m.exchange,\n            m.active,\n            CAST(m.price AS REAL) as price,\n            td.description,\n            td.homepage_url,\n            td.employees\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = ?\n        ORDER BY m.market_cap_eur DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "ticker!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "market_cap_original",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "original_currency",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "market_cap_eur",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "market_cap_usd",
+        "ordinal": 5,
+        "type_info": "Float"
+      },
+      {
+        "name": "exchange",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "active",
+        "ordinal": 7,
+        "type_info": "Bool"
+      },
+      {
+        "name": "price",
+        "ordinal": 8,
+        "type_info": "Float"
+      },
+      {
+        "name": "description",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "homepage_url",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "employees",
+        "ordinal": 11,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "e779785f6e2815a31b2eb669673d2ec619b90462cecb4df64243af2a9d3d5d5d"
+}
