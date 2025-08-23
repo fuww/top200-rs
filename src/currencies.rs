@@ -80,21 +80,21 @@ pub async fn get_rate_map_from_db(pool: &SqlitePool) -> Result<HashMap<String, f
 
 /// Adjust currency codes and amounts for subunits and alternative codes
 /// Returns (adjusted_amount, adjusted_from_currency, adjusted_to_currency)
-fn adjust_currencies(amount: f64, from_currency: &str, to_currency: &str) -> (f64, &str, &str) {
+fn adjust_currencies(amount: f64, from_currency: &str, to_currency: &str) -> (f64, String, String) {
     // Handle special cases for currency subunits and alternative codes
     let (adjusted_amount, adjusted_from_currency) = match from_currency {
-        "GBp" => (amount / 100.0, "GBP"), // Convert pence to pounds
-        "ZAc" => (amount / 100.0, "ZAR"),
-        "ILA" => (amount, "ILS"),
-        _ => (amount, from_currency),
+        "GBp" => (amount / 100.0, "GBP".to_string()), // Convert pence to pounds
+        "ZAc" => (amount / 100.0, "ZAR".to_string()),
+        "ILA" => (amount, "ILS".to_string()),
+        _ => (amount, from_currency.to_string()),
     };
 
     // Adjust target currency if needed
     let adjusted_to_currency = match to_currency {
-        "GBp" => "GBP", // Also handle GBp as target currency
-        "ZAc" => "ZAR", // Also handle ZAc as target currency
-        "ILA" => "ILS",
-        _ => to_currency,
+        "GBp" => "GBP".to_string(), // Also handle GBp as target currency
+        "ZAc" => "ZAR".to_string(), // Also handle ZAc as target currency
+        "ILA" => "ILS".to_string(),
+        _ => to_currency.to_string(),
     };
 
     (
