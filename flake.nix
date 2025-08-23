@@ -37,6 +37,7 @@
           inherit src buildInputs nativeBuildInputs;
           # Set DATABASE_URL for SQLx compile-time checking
           DATABASE_URL = "sqlite:data.db";
+          SQLX_DISABLE_DEFAULT_DOTENV = "1";
         };
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         # remember, `set1 // set2` does a shallow merge:
@@ -52,6 +53,258 @@
               inherit bin;
               default = bin;
             };
+
+        apps =
+          let
+            top200Exe = "${bin}/bin/top200-rs";
+            commonRuntimeInputs = with pkgs; [ coreutils bash sqlite openssl cacert git pkg-config sqlx-cli ];
+            cargoBin = "${rustToolchain}/bin/cargo";
+
+            runSpecificDate = pkgs.writeShellApplication {
+              name = "specific-date";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+
+                DATE="''${1:-}"
+                if [ -z "''${DATE}" ]; then
+                  echo "Usage: specific-date YYYY-MM-DD" >&2
+                  exit 1
+                fi
+
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+
+                if [ -z "''${FINANCIALMODELINGPREP_API_KEY:-}" ]; then
+                  echo "Error: FINANCIALMODELINGPREP_API_KEY is not set" >&2
+                  exit 1
+                fi
+
+                # Prepare SQLx offline data and build
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                HAD_ENV=0
+                if [ -f .env ]; then
+                  HAD_ENV=1
+                  mv .env .env.backup.sqlx
+                  trap 'if [ "$HAD_ENV" = "1" ]; then mv -f .env.backup.sqlx .env 2>/dev/null || true; fi' EXIT
+                fi
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 ${cargoBin} sqlx prepare -- --bin top200-rs
+                fi
+                ${cargoBin} build --release
+                exec ./target/release/top200-rs fetch-specific-date-market-caps "''${DATE}"
+              '';
+            };
+
+            runCompare = pkgs.writeShellApplication {
+              name = "compare";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+
+                FROM="''${1:-}"
+                TO="''${2:-}"
+                if [ -z "''${FROM}" ] || [ -z "''${TO}" ]; then
+                  echo "Usage: compare FROM_DATE TO_DATE (YYYY-MM-DD YYYY-MM-DD)" >&2
+                  exit 1
+                fi
+
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                HAD_ENV=0
+                if [ -f .env ]; then
+                  HAD_ENV=1
+                  mv .env .env.backup.sqlx
+                  trap 'if [ "$HAD_ENV" = "1" ]; then mv -f .env.backup.sqlx .env 2>/dev/null || true; fi' EXIT
+                fi
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 ${cargoBin} sqlx prepare -- --bin top200-rs
+                fi
+                ${cargoBin} build --release
+                exec ./target/release/top200-rs compare-market-caps --from "''${FROM}" --to "''${TO}"
+              '';
+            };
+
+            runVisualize = pkgs.writeShellApplication {
+              name = "generate-charts";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+
+                FROM="''${1:-}"
+                TO="''${2:-}"
+                if [ -z "''${FROM}" ] || [ -z "''${TO}" ]; then
+                  echo "Usage: generate-charts FROM_DATE TO_DATE (YYYY-MM-DD YYYY-MM-DD)" >&2
+                  exit 1
+                fi
+
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                HAD_ENV=0
+                if [ -f .env ]; then
+                  HAD_ENV=1
+                  mv .env .env.backup.sqlx
+                  trap 'if [ "$HAD_ENV" = "1" ]; then mv -f .env.backup.sqlx .env 2>/dev/null || true; fi' EXIT
+                fi
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 ${cargoBin} sqlx prepare -- --bin top200-rs
+                fi
+                ${cargoBin} build --release
+                exec ./target/release/top200-rs generate-charts --from "''${FROM}" --to "''${TO}"
+              '';
+            };
+
+            runPipeline = pkgs.writeShellApplication {
+              name = "pipeline-today-vs-7days";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+
+                # Compute dates in UTC using GNU coreutils date
+                TODAY="$(${pkgs.coreutils}/bin/date -u +%Y-%m-%d)"
+                SEVEN_AGO="$(${pkgs.coreutils}/bin/date -u -d '7 days ago' +%Y-%m-%d)"
+
+                echo "Running pipeline for ''${SEVEN_AGO} -> ''${TODAY}"
+
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+
+                if [ -z "''${FINANCIALMODELINGPREP_API_KEY:-}" ]; then
+                  echo "Error: FINANCIALMODELINGPREP_API_KEY is not set" >&2
+                  exit 1
+                fi
+
+                # Prepare SQLx offline data and build once
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                HAD_ENV=0
+                if [ -f .env ]; then
+                  HAD_ENV=1
+                  mv .env .env.backup.sqlx
+                  trap 'if [ "$HAD_ENV" = "1" ]; then mv -f .env.backup.sqlx .env 2>/dev/null || true; fi' EXIT
+                fi
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 ${cargoBin} sqlx prepare -- --bin top200-rs
+                fi
+                ${cargoBin} build --release
+
+                # Fetch market caps for both dates
+                ./target/release/top200-rs fetch-specific-date-market-caps "''${SEVEN_AGO}"
+                ./target/release/top200-rs fetch-specific-date-market-caps "''${TODAY}"
+
+                # Compare and generate charts
+                ./target/release/top200-rs compare-market-caps --from "''${SEVEN_AGO}" --to "''${TODAY}"
+                ./target/release/top200-rs generate-charts --from "''${SEVEN_AGO}" --to "''${TODAY}"
+
+                echo "✅ Pipeline completed for ''${SEVEN_AGO} -> ''${TODAY}"
+              '';
+            };
+
+            runExportCombined = pkgs.writeShellApplication {
+              name = "export-combined";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+
+                if [ -z "''${FINANCIALMODELINGPREP_API_KEY:-}" ]; then
+                  echo "Error: FINANCIALMODELINGPREP_API_KEY is not set" >&2
+                  exit 1
+                fi
+
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 sqlx prepare -- --bin top200-rs
+                fi
+                ${cargoBin} build --release
+                exec ./target/release/top200-rs export-combined
+              '';
+            };
+
+            runBuild = pkgs.writeShellApplication {
+              name = "build";
+              runtimeInputs = commonRuntimeInputs ++ [ rustToolchain ];
+              text = ''
+                set -euo pipefail
+                export DATABASE_URL="''${DATABASE_URL:-sqlite:data.db}"
+                export SSL_CERT_FILE="''${SSL_CERT_FILE:-${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt}"
+                export NIX_SSL_CERT_FILE="''${SSL_CERT_FILE}"
+                export SQLX_DISABLE_DEFAULT_ENV_FILE=1
+                export SQLX_DISABLE_DEFAULT_DOTENV=1
+                export SQLX_OFFLINE=1
+                HAD_ENV=0
+                if [ -f .env ]; then
+                  HAD_ENV=1
+                  mv .env .env.backup.sqlx
+                  trap 'if [ "$HAD_ENV" = "1" ]; then mv -f .env.backup.sqlx .env 2>/dev/null || true; fi' EXIT
+                fi
+                if [ ! -f sqlx-data.json ]; then
+                  SQLX_OFFLINE=0 ${cargoBin} sqlx prepare -- --bin top200-rs
+                fi
+                exec ${cargoBin} build --release
+              '';
+            };
+          in
+          {
+            default = {
+              type = "app";
+              program = top200Exe;
+            };
+
+            top200 = {
+              type = "app";
+              program = top200Exe;
+            };
+
+            "specific-date" = {
+              type = "app";
+              program = "${runSpecificDate}/bin/specific-date";
+            };
+
+            compare = {
+              type = "app";
+              program = "${runCompare}/bin/compare";
+            };
+
+            "generate-charts" = {
+              type = "app";
+              program = "${runVisualize}/bin/generate-charts";
+            };
+
+            "pipeline-today-vs-7days" = {
+              type = "app";
+              program = "${runPipeline}/bin/pipeline-today-vs-7days";
+            };
+
+            "export-combined" = {
+              type = "app";
+              program = "${runExportCombined}/bin/export-combined";
+            };
+
+            build = {
+              type = "app";
+              program = "${runBuild}/bin/build";
+            };
+          };
 
         devShells.default = pkgs.mkShell {
           # instead of passing `buildInputs` / `nativeBuildInputs`,
