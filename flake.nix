@@ -37,6 +37,14 @@
           inherit src buildInputs nativeBuildInputs;
           # Set DATABASE_URL for SQLx compile-time checking
           DATABASE_URL = "sqlite:data.db";
+          # Create temporary database for SQLx compile-time verification
+          preBuild = ''
+            echo "Creating temporary database for SQLx..."
+            ${pkgs.sqlite}/bin/sqlite3 data.db < migrations/20250123_init.sql
+            ${pkgs.sqlite}/bin/sqlite3 data.db < migrations/20250124123300_create_ticker_details.sql
+            ${pkgs.sqlite}/bin/sqlite3 data.db < migrations/20250817140000_create_symbol_changes.sql
+            echo "Database created successfully"
+          '';
         };
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         # remember, `set1 // set2` does a shallow merge:
