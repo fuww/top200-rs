@@ -27,8 +27,24 @@
 
         # this is how we can tell crane to use our toolchain!
         craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
-        # cf. https://crane.dev/API.html#libcleancargosource
-        src = craneLib.cleanCargoSource ./.;
+        # Include Cargo sources plus migrations and .sqlx metadata for SQLx offline
+        src =
+          let
+            filtered = pkgs.lib.cleanSourceWith {
+              src = ./.;
+              filter = path: type:
+                let
+                  rel = pkgs.lib.removePrefix ((toString ./. ) + "/") (toString path);
+                in pkgs.lib.any (p: pkgs.lib.hasPrefix p rel) [
+                  "src"
+                  "migrations"
+                  ".sqlx"
+                  "Cargo.toml"
+                  "Cargo.lock"
+                  "build.rs"
+                ];
+            };
+          in craneLib.cleanCargoSource filtered;
         # as before
         nativeBuildInputs = with pkgs; [ rustToolchain pkg-config ];
         buildInputs = with pkgs; [ openssl sqlite fontconfig ];
@@ -39,6 +55,7 @@
           DATABASE_URL = "sqlite://.sqlx/build.db?mode=rwc";
           SQLX_DISABLE_DEFAULT_DOTENV = "1";
           SQLX_OFFLINE = "1";
+          RUSTFLAGS = "--cfg sqlx_macros_offline";
         };
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         # remember, `set1 // set2` does a shallow merge:
@@ -343,6 +360,9 @@
           # Environment variables
           shellHook = ''
             export DATABASE_URL=sqlite:data.db
+            export SQLX_OFFLINE=1
+            export SQLX_DISABLE_DEFAULT_DOTENV=1
+            export RUSTFLAGS="--cfg sqlx_macros_offline ${RUSTFLAGS:-}"
             echo "🦀 Welcome to the top200-rs development environment!"
           '';
         };
