@@ -36,13 +36,29 @@
         commonArgs = {
           inherit src buildInputs nativeBuildInputs;
           # Set DATABASE_URL for SQLx compile-time checking
-          DATABASE_URL = "sqlite:data.db";
+          DATABASE_URL = "sqlite://.sqlx/build.db?mode=rwc";
           SQLX_DISABLE_DEFAULT_DOTENV = "1";
+          SQLX_OFFLINE = "1";
         };
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
         # remember, `set1 // set2` does a shallow merge:
+        buildNativeInputs = nativeBuildInputs ++ [ pkgs.sqlx-cli ];
         bin = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
+          nativeBuildInputs = buildNativeInputs;
+          preBuild = ''
+            set -euo pipefail
+            echo "Preparing SQLx offline data..."
+            export SQLX_DISABLE_DEFAULT_DOTENV=1
+            export SQLX_OFFLINE=0
+            mkdir -p .sqlx
+            DBURL="sqlite://$PWD/.sqlx/build.db?mode=rwc"
+            export DATABASE_URL="$DBURL"
+            ${pkgs.sqlx-cli}/bin/sqlx database create --database-url "$DBURL" || true
+            ${pkgs.sqlx-cli}/bin/sqlx migrate run --database-url "$DBURL"
+            cargo sqlx prepare -D "$DBURL" -- --bin top200-rs
+            export SQLX_OFFLINE=1
+          '';
         });
       in
       {
