@@ -120,7 +120,64 @@ cargo run -- compare-market-caps --from 2025-07-01 --to 2025-08-01 && \
 cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
 ```
 
-Track and apply stock ticker symbol changes:
+### Using Nix apps (CI-equivalent wrappers)
+
+The flake exposes ready-to-use apps that mirror the GitHub Actions jobs.
+
+Prereqs: Nix with flakes enabled. If flakes are not enabled globally, prefix commands with:
+
+```bash
+nix --extra-experimental-features "nix-command flakes" <subcommand> ...
+```
+
+Set required environment variables (at least the FMP API key):
+
+```bash
+export FINANCIALMODELINGPREP_API_KEY=your_fmp_key
+export DATABASE_URL=sqlite:data.db
+# Optional for US details:
+export POLYGON_API_KEY=your_polygon_key
+```
+
+- Build the project (prepares SQLx offline cache if needed):
+
+```bash
+nix run .#build
+```
+
+- Fetch market caps for a specific date (YYYY-MM-DD):
+
+```bash
+nix run .#specific-date -- 2025-08-23
+```
+
+- Compare two dates and generate CSV + summary Markdown:
+
+```bash
+nix run .#compare -- 2025-08-16 2025-08-23
+```
+
+- Generate visualizations (requires comparison CSV to exist):
+
+```bash
+nix run .#generate-charts -- 2025-08-16 2025-08-23
+```
+
+- Full pipeline: run for today and 7 days ago (UTC), compare, and generate charts:
+
+```bash
+nix run .#pipeline-today-vs-7days
+```
+
+- Export the combined daily report (mirrors daily-run workflow):
+
+```bash
+nix run .#export-combined
+```
+
+Outputs are written to `output/` (CSV files and SVG charts).
+
+### Track and apply stock ticker symbol changes:
 
 ```bash
 # Check for symbol changes that affect configured tickers
