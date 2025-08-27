@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-only
 
-name: Daily Specific Date Market Caps
+name: Daily Market Caps Multi-Period Analysis
 
 on:
   schedule:
@@ -29,7 +29,7 @@ env:
   NOTIFICATION_RECIPIENTS: ${{ secrets.NOTIFICATION_RECIPIENTS || vars.NOTIFICATION_RECIPIENTS || 'it@fashionunited.com' }}
 
 jobs:
-  collect-specific-date-data:
+  collect-and-compare-data:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,99 +42,139 @@ jobs:
       - uses: DeterminateSystems/flakehub-cache-action@main
       - uses: DeterminateSystems/flake-checker-action@main
 
-      - name: Calculate today's date
-        id: get-date
+      - name: Calculate dates
+        id: get-dates
         run: |
           # Get today's date in YYYY-MM-DD format
           TODAY=$(date -u +%Y-%m-%d)
           echo "today=$TODAY" >> $GITHUB_OUTPUT
           echo "Today's date: $TODAY"
+          
+          # Get date 7 days ago
+          WEEK_AGO=$(date -u -d "7 days ago" +%Y-%m-%d)
+          echo "week_ago=$WEEK_AGO" >> $GITHUB_OUTPUT
+          echo "7 days ago: $WEEK_AGO"
+          
+          # Get same day last month
+          # Handle edge cases for dates like Jan 31 -> Feb 28/29
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%m)
+          DAY=$(date -u +%d)
+          
+          # Calculate previous month
+          if [ "$MONTH" = "01" ]; then
+            PREV_MONTH="12"
+            PREV_YEAR=$((YEAR - 1))
+          else
+            PREV_MONTH=$(printf "%02d" $((10#$MONTH - 1)))
+            PREV_YEAR=$YEAR
+          fi
+          
+          # Check if the day exists in the previous month
+          # If not, use the last day of that month
+          MONTH_AGO="${PREV_YEAR}-${PREV_MONTH}-${DAY}"
+          if ! date -d "$MONTH_AGO" >/dev/null 2>&1; then
+            # Get last day of previous month
+            MONTH_AGO=$(date -u -d "${PREV_YEAR}-${PREV_MONTH}-01 +1 month -1 day" +%Y-%m-%d)
+          fi
+          
+          echo "month_ago=$MONTH_AGO" >> $GITHUB_OUTPUT
+          echo "Same day last month: $MONTH_AGO"
 
-      - name: Build and fetch today's market caps
+      - name: Build the application
         run: |
           nix \
             --extra-experimental-features "nix-command flakes" \
             develop \
-            --command bash -c "cargo build --release && ./target/release/top200-rs fetch-specific-date-market-caps ${{ steps.get-date.outputs.today }}"
+            --command bash -c "cargo build --release"
 
-      - name: Upload CSV artifact
+      - name: Fetch today's market caps
+        run: |
+          echo "Fetching market caps for today: ${{ steps.get-dates.outputs.today }}"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs fetch-specific-date-market-caps ${{ steps.get-dates.outputs.today }}"
+
+      - name: Fetch market caps from 7 days ago
+        run: |
+          echo "Fetching market caps for 7 days ago: ${{ steps.get-dates.outputs.week_ago }}"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs fetch-specific-date-market-caps ${{ steps.get-dates.outputs.week_ago }}"
+
+      - name: Fetch market caps from same day last month
+        run: |
+          echo "Fetching market caps for same day last month: ${{ steps.get-dates.outputs.month_ago }}"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs fetch-specific-date-market-caps ${{ steps.get-dates.outputs.month_ago }}"
+
+      - name: Compare week-over-week (7 days)
+        run: |
+          echo "Comparing market caps: ${{ steps.get-dates.outputs.week_ago }} to ${{ steps.get-dates.outputs.today }}"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-market-caps --from ${{ steps.get-dates.outputs.week_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: Compare month-over-month
+        run: |
+          echo "Comparing market caps: ${{ steps.get-dates.outputs.month_ago }} to ${{ steps.get-dates.outputs.today }}"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-market-caps --from ${{ steps.get-dates.outputs.month_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: Generate charts for week-over-week comparison
+        run: |
+          echo "Generating charts for week-over-week comparison"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs generate-charts --from ${{ steps.get-dates.outputs.week_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: Generate charts for month-over-month comparison
+        run: |
+          echo "Generating charts for month-over-month comparison"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs generate-charts --from ${{ steps.get-dates.outputs.month_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: List generated files
+        run: |
+          echo "Generated files in output directory:"
+          ls -la output/ || echo "Output directory not found"
+
+      - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: market-data-specific-date-${{ steps.get-date.outputs.today }}-run-${{ github.run_number }}
+          name: market-data-multi-period-${{ steps.get-dates.outputs.today }}-run-${{ github.run_number }}
           path: |
-            output/marketcaps_${{ steps.get-date.outputs.today }}_*.csv
+            output/marketcaps_${{ steps.get-dates.outputs.today }}_*.csv
+            output/marketcaps_${{ steps.get-dates.outputs.week_ago }}_*.csv
+            output/marketcaps_${{ steps.get-dates.outputs.month_ago }}_*.csv
+            output/comparison_${{ steps.get-dates.outputs.week_ago }}_to_${{ steps.get-dates.outputs.today }}_*.csv
+            output/comparison_${{ steps.get-dates.outputs.week_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
+            output/comparison_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.csv
+            output/comparison_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
+            output/chart_*.svg
           retention-days: 90
 
       - name: Send Email Notification via Brevo API
         if: success() # Only run if previous steps were successful
         env:
-          EMAIL_SUBJECT: "Daily Specific Date Market Caps - ${{ steps.get-date.outputs.today }} - Run #${{ github.run_number }}"
+          EMAIL_SUBJECT: "Market Caps Multi-Period Analysis - ${{ steps.get-dates.outputs.today }} - Run #${{ github.run_number }}"
           GITHUB_RUN_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          ARTIFACT_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts"
+          GITHUB_RUN_NUMBER: "${{ github.run_number }}"
+          GITHUB_SHA: "${{ github.sha }}"
+          # Pass the dates as environment variables for the script
+          TODAY_DATE: "${{ steps.get-dates.outputs.today }}"
+          WEEK_AGO_DATE: "${{ steps.get-dates.outputs.week_ago }}"
+          MONTH_AGO_DATE: "${{ steps.get-dates.outputs.month_ago }}"
         run: |
-          echo "Preparing email notification..."
-          
-          # Validate email configuration before attempting to send
-          if [ -z "${BREVO_API_KEY}" ] || [ -z "${BREVO_SENDER_EMAIL}" ] || [ -z "${NOTIFICATION_RECIPIENTS}" ]; then
-            echo "Error: Email configuration is incomplete."
-            echo "Required: BREVO_API_KEY, BREVO_SENDER_EMAIL, NOTIFICATION_RECIPIENTS"
-            echo "BREVO_API_KEY: $([ -n "${BREVO_API_KEY}" ] && echo "configured" || echo "missing")"
-            echo "BREVO_SENDER_EMAIL: $([ -n "${BREVO_SENDER_EMAIL}" ] && echo "configured" || echo "missing")"
-            echo "NOTIFICATION_RECIPIENTS: $([ -n "${NOTIFICATION_RECIPIENTS}" ] && echo "configured" || echo "missing")"
-            exit 1
-          fi
-          
-          # Parse recipients from environment variable (comma-separated)
-          IFS=',' read -ra RECIPIENTS <<< "$NOTIFICATION_RECIPIENTS"
-          
-          # Build recipients JSON array
-          RECIPIENTS_JSON="["
-          for i in "${!RECIPIENTS[@]}"; do
-            email=$(echo "${RECIPIENTS[$i]}" | xargs) # trim whitespace
-            if [ $i -gt 0 ]; then
-              RECIPIENTS_JSON+=","
-            fi
-            RECIPIENTS_JSON+="{\"email\":\"$email\"}"
-          done
-          RECIPIENTS_JSON+="]"
-          
-          echo "Recipients JSON: $RECIPIENTS_JSON"
-          
-          JSON_PAYLOAD=$(cat <<EOF
-          {
-            "sender": {
-              "name": "${BREVO_SENDER_NAME}",
-              "email": "${BREVO_SENDER_EMAIL}"
-            },
-            "to": $RECIPIENTS_JSON,
-            "subject": "${EMAIL_SUBJECT}",
-            "htmlContent": "<html><body><p>The daily specific date market caps job for Top200-RS has finished successfully.</p><p><strong>Market cap data for date:</strong> <em>${{ steps.get-date.outputs.today }}</em></p><p><strong>Run Details:</strong></p><ul><li>Run Number: #${{ github.run_number }}</li><li>Commit: ${{ github.sha }}</li><li>Workflow URL: <a href=\"${GITHUB_RUN_URL}\">${GITHUB_RUN_URL}</a></li><li>Download Artifacts: <a href=\"${ARTIFACT_URL}\">View and Download Artifacts</a></li></ul><p>The generated CSV files are available as artifacts in the workflow run.</p></body></html>"
-          }
-          EOF
-          )
-
-          echo "Sending email..."
-          echo "Sender email: ${BREVO_SENDER_EMAIL}"
-          echo "Sender name: ${BREVO_SENDER_NAME}"
-          
-          # Send request and capture both response code and body
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST https://api.brevo.com/v3/smtp/email \
-            -H "accept: application/json" \
-            -H "api-key: ${BREVO_API_KEY}" \
-            -H "content-type: application/json" \
-            -d "${JSON_PAYLOAD}")
-          
-          # Extract response code from the last line
-          RESPONSE_CODE=$(echo "$RESPONSE" | tail -n 1)
-          # Extract response body (all lines except the last)
-          RESPONSE_BODY=$(echo "$RESPONSE" | head -n -1)
-          
-          echo "Brevo API response code: ${RESPONSE_CODE}"
-          if [ "${RESPONSE_CODE}" -eq 201 ]; then
-            echo "Email notification sent successfully."
-          else
-            echo "Failed to send email notification. Response code: ${RESPONSE_CODE}"
-            echo "Response body: ${RESPONSE_BODY}"
-            echo "Error: Email notification failed. This indicates a configuration issue."
-            exit 1 # Fail the workflow when email sending fails
-          fi
+          # Use the send_brevo_email.sh script for cleaner JSON handling
+          ./send_brevo_email.sh multi-period

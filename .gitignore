@@ -37,3 +37,6 @@ tmp/
 coverage/
 
 certs/
+
+!output/.gitkeep
+output/

@@ -22,7 +22,7 @@
       "/Volumes/data/git/top200-rs-comparison"
     ]
   },
-  "enableAllProjectMcpServers": false,
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "sequential-thinking",
     "puppeteer",
