@@ -12,25 +12,25 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+on:
+  workflow_dispatch: # allows manual triggering
+  schedule:
+    - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00
+
 jobs:
-  lockfile:
-    runs-on: ubuntu-latest
-    # Add permissions for GitHub token
+  nix-flake-update:
     permissions:
       contents: write
+      id-token: write
+      issues: write
       pull-requests: write
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: DeterminateSystems/update-flake-lock@main
         with:
-          # Fetch all history for proper PR creation
-          fetch-depth: 0
-      - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@main
-      - name: Update flake.lock
-        uses: DeterminateSystems/update-flake-lock@main
-        with:
-          pr-title: "Update flake.lock" # Title of PR to be created
+          pr-title: "Update Nix flake inputs" # Title of PR to be created
           pr-labels: |                  # Labels to be set on the PR
             dependencies
             automated
