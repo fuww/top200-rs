@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="ALL" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.github/workflows/daily-run.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/daily-run.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.github/workflows/daily-specific-date.yml" beforeDir="false" afterPath="$PROJECT_DIR$/.github/workflows/daily-specific-date.yml" afterDir="false" />
-    </list>
+    <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -109,6 +106,7 @@
       <workItem from="1755957022263" duration="87000" />
       <workItem from="1756303549182" duration="2632000" />
       <workItem from="1756711032548" duration="3783000" />
+      <workItem from="1756730623518" duration="802000" />
     </task>
     <servers />
   </component>
