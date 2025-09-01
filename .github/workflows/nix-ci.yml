@@ -1,3 +1,5 @@
+name: Nix CI
+
 on:
   pull_request:
   workflow_dispatch:
