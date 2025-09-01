@@ -5,6 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/lefthook.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deny.toml" beforeDir="false" afterPath="$PROJECT_DIR$/deny.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/flake.lock" beforeDir="false" afterPath="$PROJECT_DIR$/flake.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/flake.nix" beforeDir="false" afterPath="$PROJECT_DIR$/flake.nix" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
