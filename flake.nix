@@ -57,7 +57,7 @@
           # instead of passing `buildInputs` / `nativeBuildInputs`,
             # we refer to an existing derivation here
             inputsFrom = [ bin ];
-            buildInputs = with pkgs; [ reuse clippy-sarif sarif-fmt sqlite sqlx-cli cargo-deny ];
+            buildInputs = with pkgs; [ reuse clippy-sarif sarif-fmt sqlite sqlx-cli cargo-deny lefthook ];
           # buildInputs = with pkgs; [
           #   # Rust toolchain
           #   rustToolchain

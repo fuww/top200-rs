@@ -1,0 +1,56 @@
+# Lefthook configuration for top200-rs
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    fmt:
+      glob: "*.rs"
+      run: nix develop --command cargo fmt --all -- --check
+      fail_text: "Rust formatting issues found. Run 'cargo fmt --all' to fix."
+    
+    clippy:
+      glob: "*.rs"
+      run: nix develop --command cargo clippy -- -D warnings
+      fail_text: "Clippy warnings found. Fix the issues before committing."
+    
+    test:
+      glob: "*.rs"
+      run: nix develop --command cargo test
+      fail_text: "Tests failed. Fix the failing tests before committing."
+    
+    deny:
+      files: git diff --name-only --cached | grep -E "(Cargo\.toml|Cargo\.lock)"
+      run: nix develop --command cargo deny check
+      fail_text: "Dependency or license issues found. Check cargo-deny output."
+
+pre-push:
+  parallel: false
+  commands:
+    test-all:
+      run: nix develop --command cargo test --all
+      fail_text: "All tests must pass before pushing."
+    
+    build:
+      run: nix develop --command cargo build --release
+      fail_text: "Release build failed. Fix build issues before pushing."
+
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        # Check for conventional commit format
+        pattern="^(feat|fix|docs|style|refactor|perf|test|chore|build|ci)(\(.+\))?: .{1,50}"
+        if ! grep -qE "$pattern" "$1"; then
+          echo "Commit message doesn't follow conventional format:"
+          echo "  <type>(<scope>): <subject>"
+          echo ""
+          echo "Types: feat, fix, docs, style, refactor, perf, test, chore, build, ci"
+          echo "Example: feat(marketcaps): add new comparison feature"
+          exit 1
+        fi
+
+# Skip hooks configuration
+skip_output:
+  - meta
+  - summary
