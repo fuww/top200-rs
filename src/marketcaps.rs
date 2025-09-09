@@ -81,7 +81,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
             CAST(m.market_cap_usd AS REAL) as market_cap_usd,
             m.exchange,
             m.active,
-            strftime('%s', m.timestamp) as timestamp,
+            m.timestamp,
             td.description,
             td.homepage_url,
             td.employees
@@ -93,34 +93,90 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
     .fetch_all(pool)
     .await?;
 
-    let results = records
-        .into_iter()
-        .map(|r| {
-            let market_cap_eur = r.market_cap_eur.unwrap_or(0.0) as f64;
-            (
-                market_cap_eur,
-                vec![
-                    r.ticker.clone(),
-                    r.ticker,
-                    r.name,
-                    r.market_cap_original.unwrap_or(0.0).to_string(),
-                    r.original_currency.unwrap_or_default(),
-                    r.market_cap_eur.unwrap_or(0.0).to_string(),
-                    r.market_cap_usd.unwrap_or(0.0).to_string(),
-                    r.exchange.unwrap_or_default(),
-                    if r.active.unwrap_or(true) {
-                        "true".to_string()
-                    } else {
-                        "false".to_string()
-                    },
-                    r.description.unwrap_or_default(),
-                    r.homepage_url.unwrap_or_default(),
-                    r.employees.map(|e| e.to_string()).unwrap_or_default(),
-                    r.timestamp.unwrap_or_default().to_string(),
-                ],
-            )
-        })
-        .collect();
+    let mut results = Vec::new();
+
+    for r in records {
+        let market_cap_eur = r.market_cap_eur.unwrap_or(0.0);
+        let original_currency = r.original_currency.unwrap_or_default();
+        let timestamp = r.timestamp;
+        let timestamp_str = timestamp.to_string();
+
+        // Get exchange rate information for EUR conversion
+        let (eur_pair, eur_rate, eur_rate_date) =
+            if !original_currency.is_empty() && original_currency != "EUR" {
+                match crate::currencies::get_conversion_rate_info(
+                    pool,
+                    &original_currency,
+                    "EUR",
+                    timestamp,
+                )
+                .await?
+                {
+                    Some((pair, rate, rate_timestamp)) => {
+                        let rate_date = chrono::DateTime::from_timestamp(rate_timestamp, 0)
+                            .map(|dt| dt.format("%Y-%m-%d").to_string())
+                            .unwrap_or_default();
+                        (pair, rate.to_string(), rate_date)
+                    }
+                    None => (String::new(), String::new(), String::new()),
+                }
+            } else {
+                (String::new(), String::new(), String::new())
+            };
+
+        // Get exchange rate information for USD conversion
+        let (usd_pair, usd_rate, usd_rate_date) =
+            if !original_currency.is_empty() && original_currency != "USD" {
+                match crate::currencies::get_conversion_rate_info(
+                    pool,
+                    &original_currency,
+                    "USD",
+                    timestamp,
+                )
+                .await?
+                {
+                    Some((pair, rate, rate_timestamp)) => {
+                        let rate_date = chrono::DateTime::from_timestamp(rate_timestamp, 0)
+                            .map(|dt| dt.format("%Y-%m-%d").to_string())
+                            .unwrap_or_default();
+                        (pair, rate.to_string(), rate_date)
+                    }
+                    None => (String::new(), String::new(), String::new()),
+                }
+            } else {
+                (String::new(), String::new(), String::new())
+            };
+
+        results.push((
+            market_cap_eur,
+            vec![
+                r.ticker.clone(),
+                r.ticker,
+                r.name,
+                r.market_cap_original.unwrap_or(0.0).to_string(),
+                original_currency,
+                r.market_cap_eur.unwrap_or(0.0).to_string(),
+                r.market_cap_usd.unwrap_or(0.0).to_string(),
+                r.exchange.unwrap_or_default(),
+                if r.active.unwrap_or(true) {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                },
+                r.description.unwrap_or_default(),
+                r.homepage_url.unwrap_or_default(),
+                r.employees.map(|e| e.to_string()).unwrap_or_default(),
+                timestamp_str,
+                // New exchange rate columns
+                eur_pair,
+                eur_rate,
+                eur_rate_date,
+                usd_pair,
+                usd_rate,
+                usd_rate_date,
+            ],
+        ));
+    }
 
     Ok(results)
 }
@@ -213,7 +269,7 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Symbol",
         "Ticker",
         "Name",
@@ -227,6 +283,12 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Homepage URL",
         "Employees",
         "Timestamp",
+        "EUR Conversion Pair",
+        "EUR Exchange Rate",
+        "EUR Rate Date",
+        "USD Conversion Pair",
+        "USD Exchange Rate",
+        "USD Rate Date",
     ])?;
 
     // Write data
@@ -260,7 +322,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Symbol",
         "Ticker",
         "Name",
@@ -274,6 +336,12 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Homepage URL",
         "Employees",
         "Timestamp",
+        "EUR Conversion Pair",
+        "EUR Exchange Rate",
+        "EUR Rate Date",
+        "USD Conversion Pair",
+        "USD Exchange Rate",
+        "USD Rate Date",
     ])?;
 
     // Write data
@@ -287,17 +355,23 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
 
 /// Main entry point for market cap functionality
 pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
-    // First update currencies and exchange rates
-    let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
-        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
-    let fmp_client = api::FMPClient::new(api_key);
+    // Check if we have API key, if not just export existing data
+    if let Ok(api_key) = std::env::var("FINANCIALMODELINGPREP_API_KEY") {
+        if !api_key.is_empty() {
+            let fmp_client = api::FMPClient::new(api_key);
 
-    println!("Updating currencies and exchange rates...");
-    update_currencies(&fmp_client, pool).await?;
-    exchange_rates::update_exchange_rates(&fmp_client, pool).await?;
+            println!("Updating currencies and exchange rates...");
+            update_currencies(&fmp_client, pool).await?;
+            exchange_rates::update_exchange_rates(&fmp_client, pool).await?;
 
-    // Then update market caps
-    update_market_caps(pool).await?;
+            // Then update market caps
+            update_market_caps(pool).await?;
+        } else {
+            println!("No API key provided, using existing data...");
+        }
+    } else {
+        println!("No API key found, using existing data...");
+    }
 
     // Export both the full list and top 100 active
     export_market_caps(pool).await?;
