@@ -75,6 +75,20 @@ pub struct FMPCompanyProfile {
     pub extra: std::collections::HashMap<String, Value>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct FMPExecutive {
+    pub title: String,
+    pub name: String,
+    #[serde(default)]
+    pub pay: Option<f64>,
+    #[serde(rename = "currencyPay", default)]
+    pub currency_pay: Option<String>,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(rename = "yearBorn", default)]
+    pub year_born: Option<i32>,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct FMPRatios {

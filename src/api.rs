@@ -14,7 +14,9 @@ use tokio::sync::Semaphore;
 use tokio::time::sleep;
 
 use crate::currencies::convert_currency;
-use crate::models::{Details, FMPCompanyProfile, FMPIncomeStatement, FMPRatios, PolygonResponse};
+use crate::models::{
+    Details, FMPCompanyProfile, FMPExecutive, FMPIncomeStatement, FMPRatios, PolygonResponse,
+};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct SymbolChange {
@@ -133,7 +135,7 @@ impl FMPClient {
             anyhow::bail!("ticker empty");
         }
 
-        // Prepare URLs for all three requests
+        // Prepare URLs for all four requests
         let profile_url = format!(
             "https://financialmodelingprep.com/api/v3/profile/{}?apikey={}",
             ticker, self.api_key
@@ -146,12 +148,17 @@ impl FMPClient {
             "https://financialmodelingprep.com/api/v3/income-statement/{}?limit=1&apikey={}",
             ticker, self.api_key
         );
+        let executives_url = format!(
+            "https://financialmodelingprep.com/api/v3/key-executives/{}?apikey={}",
+            ticker, self.api_key
+        );
 
-        // Make all three requests in parallel
-        let (profiles, ratios, income_statements) = tokio::try_join!(
+        // Make all four requests in parallel
+        let (profiles, ratios, income_statements, executives) = tokio::try_join!(
             self.make_request::<Vec<FMPCompanyProfile>>(profile_url),
             self.make_request::<Vec<FMPRatios>>(ratios_url),
-            self.make_request::<Vec<FMPIncomeStatement>>(income_url)
+            self.make_request::<Vec<FMPIncomeStatement>>(income_url),
+            self.make_request::<Vec<FMPExecutive>>(executives_url)
         )?;
 
         if profiles.is_empty() {
@@ -162,6 +169,15 @@ impl FMPClient {
         let currency = profile.currency.as_str();
         let ratios = ratios.first().cloned();
         let income = income_statements.first().cloned();
+
+        // Extract CEO name from executives list
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
 
         // Get current timestamp in ISO 8601 format
         let timestamp = chrono::Utc::now().to_rfc3339();
@@ -180,7 +196,7 @@ impl FMPClient {
             revenue: income.as_ref().and_then(|i| i.revenue),
             revenue_usd: None,
             timestamp: Some(timestamp),
-            ceo: profile.ceo.clone(),
+            ceo: ceo_name,
             working_capital_ratio: ratios.as_ref().and_then(|r| r.current_ratio),
             quick_ratio: ratios.as_ref().and_then(|r| r.quick_ratio),
             eps: ratios.as_ref().and_then(|r| r.eps),
