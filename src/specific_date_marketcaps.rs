@@ -149,7 +149,8 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
             CAST(m.price AS REAL) as price,
             td.description,
             td.homepage_url,
-            td.employees
+            td.employees,
+            td.ceo
         FROM market_caps m
         LEFT JOIN ticker_details td ON m.ticker = td.ticker
         WHERE m.timestamp = ?
@@ -191,6 +192,7 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
         "Description",
         "Homepage URL",
         "Employees",
+        "CEO",
         "Date",
     ])?;
 
@@ -214,6 +216,7 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
             record.description.clone().unwrap_or_default(),
             record.homepage_url.clone().unwrap_or_default(),
             record.employees.map(|e| e.to_string()).unwrap_or_default(),
+            record.ceo.clone().unwrap_or_default(),
             date_str.to_string(),
         ])?;
     }
