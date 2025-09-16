@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO ticker_details (ticker, description, homepage_url, employees, ceo)\n        VALUES (?, ?, ?, ?, ?)\n        ON CONFLICT(ticker) DO UPDATE SET\n            description = excluded.description,\n            homepage_url = excluded.homepage_url,\n            employees = excluded.employees,\n            ceo = excluded.ceo,\n            updated_at = CURRENT_TIMESTAMP\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "b980ee900e53d62c30cdde9c17d6a2f5b1c9c5359be99884a7e4d589c84692d4"
+}
