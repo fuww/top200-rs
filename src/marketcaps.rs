@@ -62,6 +62,7 @@ async fn store_market_cap(
         description: details.description.clone(),
         homepage_url: details.homepage_url.clone(),
         employees: details.employees.clone(),
+        ceo: details.ceo.clone(),
     };
     ticker_details::update_ticker_details(pool, &ticker_details).await?;
 
@@ -84,7 +85,8 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
             strftime('%s', m.timestamp) as timestamp,
             td.description,
             td.homepage_url,
-            td.employees
+            td.employees,
+            td.ceo
         FROM market_caps m
         LEFT JOIN ticker_details td ON m.ticker = td.ticker
         WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)
@@ -116,6 +118,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
                     r.description.unwrap_or_default(),
                     r.homepage_url.unwrap_or_default(),
                     r.employees.map(|e| e.to_string()).unwrap_or_default(),
+                    r.ceo.unwrap_or_default(),
                     r.timestamp.unwrap_or_default().to_string(),
                 ],
             )
@@ -226,6 +229,7 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Description",
         "Homepage URL",
         "Employees",
+        "CEO",
         "Timestamp",
     ])?;
 
@@ -273,6 +277,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Description",
         "Homepage URL",
         "Employees",
+        "CEO",
         "Timestamp",
     ])?;
 

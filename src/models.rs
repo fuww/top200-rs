@@ -25,6 +25,7 @@ pub struct Details {
     pub revenue: Option<f64>,
     pub revenue_usd: Option<f64>,
     pub timestamp: Option<String>,
+    pub ceo: Option<String>,
     // Financial ratios
     pub working_capital_ratio: Option<f64>,
     pub quick_ratio: Option<f64>,
@@ -67,9 +68,25 @@ pub struct FMPCompanyProfile {
     pub exchange: String,
     #[serde(rename = "isActivelyTrading", default)]
     pub is_active: bool,
+    #[serde(default)]
+    pub ceo: Option<String>,
     // Add any other fields you need from the FMP API
     #[serde(flatten)]
     pub extra: std::collections::HashMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FMPExecutive {
+    pub title: String,
+    pub name: String,
+    #[serde(default)]
+    pub pay: Option<f64>,
+    #[serde(rename = "currencyPay", default)]
+    pub currency_pay: Option<String>,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(rename = "yearBorn", default)]
+    pub year_born: Option<i32>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -117,6 +134,7 @@ pub struct Stock {
     pub pe_ratio: f64,
     pub debt_equity_ratio: f64,
     pub roe: f64,
+    pub ceo: String,
 }
 
 #[allow(dead_code)]
@@ -145,6 +163,7 @@ mod tests {
             revenue: Some(365000000000.0),
             revenue_usd: Some(365000000000.0),
             timestamp: Some("2024-01-01".to_string()),
+            ceo: Some("Tim Cook".to_string()),
             working_capital_ratio: Some(1.2),
             quick_ratio: Some(0.9),
             eps: Some(6.05),
@@ -197,7 +216,8 @@ mod tests {
             "price": 150.0,
             "currency": "USD",
             "exchangeShortName": "NASDAQ",
-            "isActivelyTrading": true
+            "isActivelyTrading": true,
+            "ceo": "Tim Cook"
         });
 
         let profile: FMPCompanyProfile = serde_json::from_value(json).unwrap();
@@ -208,6 +228,7 @@ mod tests {
         assert_eq!(profile.currency, "USD");
         assert_eq!(profile.exchange, "NASDAQ");
         assert_eq!(profile.is_active, true);
+        assert_eq!(profile.ceo, Some("Tim Cook".to_string()));
     }
 
     #[test]
@@ -266,6 +287,7 @@ mod tests {
             pe_ratio: 28.5,
             debt_equity_ratio: 2.1,
             roe: 0.15,
+            ceo: "Tim Cook".to_string(),
         };
 
         let json = serde_json::to_string(&stock).unwrap();
