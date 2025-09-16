@@ -405,9 +405,10 @@ fn export_summary_report(
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         writeln!(
             file,
-            "{}. **{}** ({}): +{:.2}% (${:.2}M increase)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): +{:.2}% (${:.2}M increase)",
             i + 1,
             comp.name,
+            comp.ticker,
             comp.ticker,
             comp.percentage_change.unwrap(),
             comp.absolute_change.unwrap_or(0.0) / 1_000_000.0
@@ -427,9 +428,10 @@ fn export_summary_report(
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         writeln!(
             file,
-            "{}. **{}** ({}): {:.2}% (${:.2}M decrease)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}% (${:.2}M decrease)",
             i + 1,
             comp.name,
+            comp.ticker,
             comp.ticker,
             comp.percentage_change.unwrap(),
             comp.absolute_change.unwrap_or(0.0) / 1_000_000.0
@@ -449,9 +451,10 @@ fn export_summary_report(
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         writeln!(
             file,
-            "{}. **{}** ({}): ${:.2}B gain ({:.2}%)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B gain ({:.2}%)",
             i + 1,
             comp.name,
+            comp.ticker,
             comp.ticker,
             comp.absolute_change.unwrap_or(0.0) / 1_000_000_000.0,
             comp.percentage_change.unwrap_or(0.0)
@@ -472,9 +475,10 @@ fn export_summary_report(
         if comp.absolute_change.unwrap_or(0.0) < 0.0 {
             writeln!(
                 file,
-                "{}. **{}** ({}): ${:.2}B loss ({:.2}%)",
+                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B loss ({:.2}%)",
                 i + 1,
                 comp.name,
+                comp.ticker,
                 comp.ticker,
                 comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000_000.0,
                 comp.percentage_change.unwrap_or(0.0)
@@ -495,9 +499,10 @@ fn export_summary_report(
         if comp.rank_change.unwrap() > 0 {
             writeln!(
                 file,
-                "{}. **{}** ({}): +{} positions (#{} → #{})",
+                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): +{} positions (#{} → #{})",
                 i + 1,
                 comp.name,
+                comp.ticker,
                 comp.ticker,
                 comp.rank_change.unwrap(),
                 comp.rank_from.unwrap_or(0),
@@ -515,9 +520,10 @@ fn export_summary_report(
         if comp.rank_change.unwrap() < 0 {
             writeln!(
                 file,
-                "{}. **{}** ({}): {} positions (#{} → #{})",
+                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {} positions (#{} → #{})",
                 i + 1,
                 comp.name,
+                comp.ticker,
                 comp.ticker,
                 comp.rank_change.unwrap(),
                 comp.rank_from.unwrap_or(0),
