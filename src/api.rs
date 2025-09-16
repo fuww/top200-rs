@@ -180,6 +180,7 @@ impl FMPClient {
             revenue: income.as_ref().and_then(|i| i.revenue),
             revenue_usd: None,
             timestamp: Some(timestamp),
+            ceo: profile.ceo.clone(),
             working_capital_ratio: ratios.as_ref().and_then(|r| r.current_ratio),
             quick_ratio: ratios.as_ref().and_then(|r| r.quick_ratio),
             eps: ratios.as_ref().and_then(|r| r.eps),
