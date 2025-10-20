@@ -28,6 +28,10 @@ struct MarketCapRecord {
     market_cap_eur: Option<f64>,
     #[serde(rename = "Market Cap (USD)")]
     market_cap_usd: Option<f64>,
+    #[serde(rename = "Rate to EUR")]
+    rate_to_eur: Option<String>,
+    #[serde(rename = "Rate to USD")]
+    rate_to_usd: Option<String>,
 }
 
 #[derive(Debug)]
@@ -249,11 +253,33 @@ pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
     progress.inc(1);
     progress.finish_with_message("Analysis complete");
 
+    // Collect currency conversion rates from the records
+    let mut currency_rates: HashMap<String, (String, String)> = HashMap::new();
+    for record in to_records.iter() {
+        if let Some(currency) = &record.original_currency {
+            if !currency_rates.contains_key(currency) {
+                currency_rates.insert(
+                    currency.clone(),
+                    (
+                        record
+                            .rate_to_eur
+                            .clone()
+                            .unwrap_or_else(|| "N/A".to_string()),
+                        record
+                            .rate_to_usd
+                            .clone()
+                            .unwrap_or_else(|| "N/A".to_string()),
+                    ),
+                );
+            }
+        }
+    }
+
     // Export main comparison CSV
     export_comparison_csv(&comparisons, from_date, to_date)?;
 
     // Export summary report
-    export_summary_report(&comparisons, from_date, to_date)?;
+    export_summary_report(&comparisons, from_date, to_date, &currency_rates)?;
 
     Ok(())
 }
@@ -340,6 +366,7 @@ fn export_summary_report(
     comparisons: &[MarketCapComparison],
     from_date: &str,
     to_date: &str,
+    currency_rates: &HashMap<String, (String, String)>,
 ) -> Result<()> {
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let filename = format!(
@@ -386,6 +413,29 @@ fn export_summary_report(
         total_pct_change
     )?;
     writeln!(file)?;
+
+    // Currency conversion rates section
+    if !currency_rates.is_empty() {
+        writeln!(file, "## Currency Conversion Rates")?;
+        writeln!(
+            file,
+            "Exchange rates used for converting market caps to EUR and USD:"
+        )?;
+        writeln!(file)?;
+
+        // Sort currencies alphabetically for consistent output
+        let mut sorted_currencies: Vec<_> = currency_rates.iter().collect();
+        sorted_currencies.sort_by(|a, b| a.0.cmp(b.0));
+
+        for (currency, (rate_eur, rate_usd)) in sorted_currencies {
+            writeln!(
+                file,
+                "- **{}**: {} (to EUR), {} (to USD)",
+                currency, rate_eur, rate_usd
+            )?;
+        }
+        writeln!(file)?;
+    }
 
     // Filter out comparisons with valid percentage changes
     let mut valid_comparisons: Vec<_> = comparisons
