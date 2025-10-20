@@ -78,6 +78,59 @@ pub async fn get_rate_map_from_db(pool: &SqlitePool) -> Result<HashMap<String, f
     Ok(rate_map)
 }
 
+/// Get the exchange rate between two currencies
+/// Returns the rate used for conversion, or None if no rate is available
+pub fn get_conversion_rate(
+    from_currency: &str,
+    to_currency: &str,
+    rate_map: &HashMap<String, f64>,
+) -> Option<f64> {
+    if from_currency == to_currency {
+        return Some(1.0);
+    }
+
+    // Handle special cases for currency subunits and alternative codes
+    let adjusted_from_currency = match from_currency {
+        "GBp" => "GBP",
+        "ZAc" => "ZAR",
+        "ILA" => "ILS",
+        _ => from_currency,
+    };
+
+    let adjusted_to_currency = match to_currency {
+        "GBp" => "GBP",
+        "ZAc" => "ZAR",
+        "ILA" => "ILS",
+        _ => to_currency,
+    };
+
+    // Try direct conversion first
+    let direct_rate = format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
+    if let Some(&rate) = rate_map.get(&direct_rate) {
+        return Some(rate);
+    }
+
+    // Try reverse rate
+    let reverse_rate = format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
+    if let Some(&rate) = rate_map.get(&reverse_rate) {
+        return Some(1.0 / rate);
+    }
+
+    // Try conversion through intermediate currencies
+    for (pair, &rate1) in rate_map {
+        if let Some((from1, to1)) = pair.split_once('/') {
+            if from1 == adjusted_from_currency {
+                let second_leg = format!("{}/{}", to1, adjusted_to_currency);
+                if let Some(&rate2) = rate_map.get(&second_leg) {
+                    return Some(rate1 * rate2);
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Convert an amount from one currency to another using the rate map
 pub fn convert_currency(
     amount: f64,

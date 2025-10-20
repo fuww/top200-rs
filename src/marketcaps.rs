@@ -3,7 +3,9 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db, update_currencies};
+use crate::currencies::{
+    convert_currency, get_conversion_rate, get_rate_map_from_db, update_currencies,
+};
 use crate::exchange_rates;
 use crate::models;
 use crate::ticker_details::{self, TickerDetails};
@@ -206,6 +208,9 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
     let mut results = get_market_caps(pool).await?;
     println!("✅ Market cap data fetched from database");
 
+    // Get exchange rates for conversion rate columns
+    let rate_map = get_rate_map_from_db(pool).await?;
+
     // Sort by EUR market cap
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -224,6 +229,8 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Original Currency",
         "Market Cap (EUR)",
         "Market Cap (USD)",
+        "Rate to EUR",
+        "Rate to USD",
         "Exchange",
         "Active",
         "Description",
@@ -235,7 +242,36 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
 
     // Write data
     for (_, record) in &results {
-        writer.write_record(record)?;
+        let original_currency = &record[4]; // Original Currency column
+
+        // Get conversion rates
+        let rate_to_eur = get_conversion_rate(original_currency, "EUR", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        let rate_to_usd = get_conversion_rate(original_currency, "USD", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        // Write record with rates inserted after USD market cap
+        writer.write_record(&[
+            &record[0], // Symbol
+            &record[1], // Ticker
+            &record[2], // Name
+            &record[3], // Market Cap (Original)
+            &record[4], // Original Currency
+            &record[5], // Market Cap (EUR)
+            &record[6], // Market Cap (USD)
+            &rate_to_eur,
+            &rate_to_usd,
+            &record[7],  // Exchange
+            &record[8],  // Active
+            &record[9],  // Description
+            &record[10], // Homepage URL
+            &record[11], // Employees
+            &record[12], // CEO
+            &record[13], // Timestamp
+        ])?;
     }
 
     println!("✅ Market cap data exported to {}", filename);
@@ -246,6 +282,9 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
 pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     // Get market cap data from database
     let mut results = get_market_caps(pool).await?;
+
+    // Get exchange rates for conversion rate columns
+    let rate_map = get_rate_map_from_db(pool).await?;
 
     // Sort by EUR market cap
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -272,6 +311,8 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Original Currency",
         "Market Cap (EUR)",
         "Market Cap (USD)",
+        "Rate to EUR",
+        "Rate to USD",
         "Exchange",
         "Active",
         "Description",
@@ -283,7 +324,36 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
 
     // Write data
     for (_, record) in active_results {
-        writer.write_record(record)?;
+        let original_currency = &record[4]; // Original Currency column
+
+        // Get conversion rates
+        let rate_to_eur = get_conversion_rate(original_currency, "EUR", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        let rate_to_usd = get_conversion_rate(original_currency, "USD", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        // Write record with rates inserted after USD market cap
+        writer.write_record(&[
+            &record[0], // Symbol
+            &record[1], // Ticker
+            &record[2], // Name
+            &record[3], // Market Cap (Original)
+            &record[4], // Original Currency
+            &record[5], // Market Cap (EUR)
+            &record[6], // Market Cap (USD)
+            &rate_to_eur,
+            &rate_to_usd,
+            &record[7],  // Exchange
+            &record[8],  // Active
+            &record[9],  // Description
+            &record[10], // Homepage URL
+            &record[11], // Employees
+            &record[12], // CEO
+            &record[13], // Timestamp
+        ])?;
     }
 
     println!("✅ Top 100 active companies exported to {}", filename);

@@ -4,7 +4,7 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db};
+use crate::currencies::{convert_currency, get_conversion_rate, get_rate_map_from_db};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::Writer;
@@ -134,6 +134,9 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
     let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
     let timestamp = naive_dt.and_utc().timestamp();
 
+    // Get exchange rates to show in the output
+    let rate_map = get_rate_map_from_db(pool).await?;
+
     // Fetch market caps for the specific date
     let records = sqlx::query!(
         r#"
@@ -186,6 +189,8 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
         "Original Currency",
         "Market Cap (EUR)",
         "Market Cap (USD)",
+        "Rate to EUR",
+        "Rate to USD",
         "Price",
         "Exchange",
         "Active",
@@ -198,14 +203,27 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
 
     // Write data with rank
     for (index, record) in records.iter().enumerate() {
+        let original_currency = record.original_currency.clone().unwrap_or_default();
+
+        // Get conversion rates used
+        let rate_to_eur = get_conversion_rate(&original_currency, "EUR", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
+        let rate_to_usd = get_conversion_rate(&original_currency, "USD", &rate_map)
+            .map(|r| format!("{:.6}", r))
+            .unwrap_or_else(|| "N/A".to_string());
+
         writer.write_record(&[
             (index + 1).to_string(),
             record.ticker.clone(),
             record.name.clone(),
             record.market_cap_original.unwrap_or(0.0).to_string(),
-            record.original_currency.clone().unwrap_or_default(),
+            original_currency,
             record.market_cap_eur.unwrap_or(0.0).to_string(),
             record.market_cap_usd.unwrap_or(0.0).to_string(),
+            rate_to_eur,
+            rate_to_usd,
             record.price.unwrap_or(0.0).to_string(),
             record.exchange.clone().unwrap_or_default(),
             if record.active.unwrap_or(true) {
