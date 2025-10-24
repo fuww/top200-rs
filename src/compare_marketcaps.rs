@@ -3,14 +3,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use anyhow::{Context, Result};
-use chrono::Local;
+use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::{Reader, Writer};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
+use sqlx::sqlite::SqlitePool;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
+
+use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
 
 #[derive(Debug, Deserialize)]
 struct MarketCapRecord {
@@ -111,7 +114,7 @@ fn calculate_market_shares(records: &[MarketCapRecord]) -> HashMap<String, f64> 
 }
 
 /// Compare market caps between two dates
-pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
+pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &str) -> Result<()> {
     println!("Comparing market caps from {} to {}", from_date, to_date);
 
     // Find CSV files for both dates
@@ -121,6 +124,37 @@ pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
     println!("Using files:");
     println!("  From: {}", from_file);
     println!("  To:   {}", to_file);
+
+    // Get exchange rates for the "to" date to normalize all values
+    let to_date_parsed = NaiveDate::parse_from_str(to_date, "%Y-%m-%d")?;
+    let to_date_timestamp = NaiveDateTime::new(to_date_parsed, NaiveTime::default())
+        .and_utc()
+        .timestamp();
+
+    println!(
+        "\n🔄 Normalizing currencies using {} exchange rates...",
+        to_date
+    );
+    let mut normalization_rates =
+        get_rate_map_from_db_for_date(pool, Some(to_date_timestamp)).await?;
+
+    // If no rates found for the specific date, fall back to latest available rates
+    if normalization_rates.is_empty() {
+        eprintln!(
+            "⚠️  No exchange rates found for {} - falling back to latest rates",
+            to_date
+        );
+        normalization_rates = get_rate_map_from_db_for_date(pool, None).await?;
+    }
+
+    if normalization_rates.is_empty() {
+        eprintln!("⚠️  WARNING: No exchange rates found at all!");
+        eprintln!("    Comparisons will include both market cap AND currency changes.");
+        eprintln!("    Run 'export-rates' to fetch exchange rates.");
+    } else {
+        println!("✅ Using exchange rates for currency normalization");
+        println!("   This eliminates FX noise and shows pure market cap changes");
+    }
 
     // Read data from both files
     let progress = ProgressBar::new(4);
@@ -191,6 +225,31 @@ pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
         all_tickers.insert(ticker.clone());
     }
 
+    // Debug: Print sample values for first few tickers to verify data quality
+    let mut debug_count = 0;
+    eprintln!("\n=== DEBUG: Sample Market Cap Values ===");
+    for ticker in all_tickers.iter().take(3) {
+        if let (Some(from_rec), Some(to_rec)) = (from_map.get(ticker), to_map.get(ticker)) {
+            if let (Some(from_val), Some(to_val)) = (from_rec.market_cap_usd, to_rec.market_cap_usd)
+            {
+                eprintln!("Ticker: {}", ticker);
+                eprintln!(
+                    "  From: ${:.0} (${:.2}B)",
+                    from_val,
+                    from_val / 1_000_000_000.0
+                );
+                eprintln!("  To:   ${:.0} (${:.2}B)", to_val, to_val / 1_000_000_000.0);
+                let pct = ((to_val - from_val) / from_val) * 100.0;
+                eprintln!("  Change: {:.2}%\n", pct);
+                debug_count += 1;
+                if debug_count >= 3 {
+                    break;
+                }
+            }
+        }
+    }
+    eprintln!("=======================================\n");
+
     for ticker in all_tickers {
         let from_record = from_map.get(&ticker);
         let to_record = to_map.get(&ticker);
@@ -200,8 +259,33 @@ pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
             .or_else(|| to_record.map(|r| r.name.clone()))
             .unwrap_or_else(|| ticker.clone());
 
-        let market_cap_from = from_record.and_then(|r| r.market_cap_usd);
-        let market_cap_to = to_record.and_then(|r| r.market_cap_usd);
+        // NORMALIZE: Convert both dates using the SAME exchange rate (to_date's rate)
+        // This eliminates FX noise and shows pure market cap changes
+        let market_cap_from = from_record.and_then(|r| {
+            r.market_cap_original.map(|orig| {
+                let currency = r.original_currency.as_deref().unwrap_or("USD");
+                if normalization_rates.is_empty() {
+                    // Fallback: use unconverted USD value if no rates available
+                    r.market_cap_usd.unwrap_or(orig)
+                } else {
+                    // Normalize: convert original value using to_date's exchange rate
+                    convert_currency(orig, currency, "USD", &normalization_rates)
+                }
+            })
+        });
+
+        let market_cap_to = to_record.and_then(|r| {
+            r.market_cap_original.map(|orig| {
+                let currency = r.original_currency.as_deref().unwrap_or("USD");
+                if normalization_rates.is_empty() {
+                    // Fallback: use unconverted USD value if no rates available
+                    r.market_cap_usd.unwrap_or(orig)
+                } else {
+                    // Normalize: convert original value using to_date's exchange rate
+                    convert_currency(orig, currency, "USD", &normalization_rates)
+                }
+            })
+        });
 
         let (absolute_change, percentage_change) = match (market_cap_from, market_cap_to) {
             (Some(from_val), Some(to_val)) => {
@@ -402,7 +486,19 @@ fn export_summary_report(
             .unwrap()
     });
 
+    eprintln!("=== DEBUG: Top 3 Gainers ===");
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+        let pct = comp.percentage_change.unwrap();
+        let abs_change = comp.absolute_change.unwrap_or(0.0);
+
+        if i < 3 {
+            eprintln!("{}. {} ({}):", i + 1, comp.name, comp.ticker);
+            eprintln!("   From: ${:.0}", comp.market_cap_from.unwrap_or(0.0));
+            eprintln!("   To:   ${:.0}", comp.market_cap_to.unwrap_or(0.0));
+            eprintln!("   Abs change: ${:.0}", abs_change);
+            eprintln!("   Pct change: {:.2}%\n", pct);
+        }
+
         writeln!(
             file,
             "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): +{:.2}% (${:.2}M increase)",
@@ -410,10 +506,11 @@ fn export_summary_report(
             comp.name,
             comp.ticker,
             comp.ticker,
-            comp.percentage_change.unwrap(),
-            comp.absolute_change.unwrap_or(0.0) / 1_000_000.0
+            pct,
+            abs_change / 1_000_000.0
         )?;
     }
+    eprintln!("============================\n");
     writeln!(file)?;
 
     // Top 10 losers
@@ -619,6 +716,38 @@ mod tests {
 
         assert_eq!(abs_change, 100000000.0);
         assert_eq!(pct_change, 10.0);
+    }
+
+    #[test]
+    fn test_market_cap_large_realistic_values() {
+        // Apple-like market cap: ~$3 trillion
+        let from_val = 3_000_000_000_000.0;
+        let to_val = 3_300_000_000_000.0; // 10% increase
+        let abs_change = to_val - from_val;
+        let pct_change = if from_val != 0.0 {
+            (abs_change / from_val) * 100.0
+        } else {
+            0.0
+        };
+
+        assert_eq!(abs_change, 300_000_000_000.0); // $300B increase
+        assert_eq!(pct_change, 10.0); // 10% increase
+    }
+
+    #[test]
+    fn test_market_cap_small_percentage() {
+        // Test a small 2% change
+        let from_val = 1_000_000_000_000.0; // $1T
+        let to_val = 1_020_000_000_000.0; // $1.02T
+        let abs_change = to_val - from_val;
+        let pct_change = if from_val != 0.0 {
+            (abs_change / from_val) * 100.0
+        } else {
+            0.0
+        };
+
+        assert_eq!(abs_change, 20_000_000_000.0); // $20B increase
+        assert_eq!(pct_change, 2.0); // 2% increase
     }
 
     #[test]

@@ -4,7 +4,7 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db};
+use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sqlx::sqlite::SqlitePool;
@@ -41,9 +41,10 @@ pub async fn fetch_monthly_historical_marketcaps(
             let time = NaiveTime::from_hms_opt(23, 59, 0).unwrap();
             let naive_dt = NaiveDateTime::new(last_day, time);
             let datetime_utc = naive_dt.and_utc();
+            let timestamp = naive_dt.and_utc().timestamp();
 
             println!("Fetching exchange rates for {}", naive_dt);
-            let rate_map = get_rate_map_from_db(pool).await?;
+            let rate_map = get_rate_map_from_db_for_date(pool, Some(timestamp)).await?;
 
             for ticker in &tickers {
                 match fmp_client
