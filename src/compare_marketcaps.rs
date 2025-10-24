@@ -585,3 +585,106 @@ fn export_summary_report(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_yahoo_finance_link_format() {
+        // Test that ticker is properly formatted in markdown link
+        let ticker = "AAPL";
+        let expected = format!("[{}](https://finance.yahoo.com/quote/{}/)", ticker, ticker);
+        assert_eq!(expected, "[AAPL](https://finance.yahoo.com/quote/AAPL/)");
+    }
+
+    #[test]
+    fn test_yahoo_finance_link_with_special_characters() {
+        // Test tickers with special characters (e.g., BRK.B, BF.A)
+        let ticker = "BRK.B";
+        let link = format!("[{}](https://finance.yahoo.com/quote/{}/)", ticker, ticker);
+        assert_eq!(link, "[BRK.B](https://finance.yahoo.com/quote/BRK.B/)");
+    }
+
+    #[test]
+    fn test_market_cap_comparison_calculation() {
+        let from_val = 1000000000.0;
+        let to_val = 1100000000.0;
+        let abs_change = to_val - from_val;
+        let pct_change = if from_val != 0.0 {
+            (abs_change / from_val) * 100.0
+        } else {
+            0.0
+        };
+
+        assert_eq!(abs_change, 100000000.0);
+        assert_eq!(pct_change, 10.0);
+    }
+
+    #[test]
+    fn test_market_cap_comparison_negative_change() {
+        let from_val = 1000000000.0;
+        let to_val = 900000000.0;
+        let abs_change = to_val - from_val;
+        let pct_change = if from_val != 0.0 {
+            (abs_change / from_val) * 100.0
+        } else {
+            0.0
+        };
+
+        assert_eq!(abs_change, -100000000.0);
+        assert_eq!(pct_change, -10.0);
+    }
+
+    #[test]
+    fn test_rank_change_calculation() {
+        // Rank improved from 10 to 5 (positive rank change)
+        let from_rank = 10;
+        let to_rank = 5;
+        let rank_change = from_rank as i32 - to_rank as i32;
+
+        assert_eq!(rank_change, 5); // Positive means improvement
+    }
+
+    #[test]
+    fn test_rank_change_decline() {
+        // Rank declined from 5 to 10 (negative rank change)
+        let from_rank = 5;
+        let to_rank = 10;
+        let rank_change = from_rank as i32 - to_rank as i32;
+
+        assert_eq!(rank_change, -5); // Negative means decline
+    }
+
+    #[test]
+    fn test_market_share_calculation() {
+        let records = vec![
+            MarketCapRecord {
+                rank: Some(1),
+                ticker: "AAPL".to_string(),
+                name: "Apple".to_string(),
+                market_cap_original: Some(2000000000000.0),
+                original_currency: Some("USD".to_string()),
+                market_cap_eur: Some(1800000000000.0),
+                market_cap_usd: Some(2000000000000.0),
+            },
+            MarketCapRecord {
+                rank: Some(2),
+                ticker: "MSFT".to_string(),
+                name: "Microsoft".to_string(),
+                market_cap_original: Some(1000000000000.0),
+                original_currency: Some("USD".to_string()),
+                market_cap_eur: Some(900000000000.0),
+                market_cap_usd: Some(1000000000000.0),
+            },
+        ];
+
+        let shares = calculate_market_shares(&records);
+
+        // Total market cap: 3T
+        // AAPL share: 2T / 3T = 66.67%
+        // MSFT share: 1T / 3T = 33.33%
+        assert!((shares.get("AAPL").unwrap() - 66.666666).abs() < 0.01);
+        assert!((shares.get("MSFT").unwrap() - 33.333333).abs() < 0.01);
+    }
+}

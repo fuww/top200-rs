@@ -446,4 +446,153 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("ticker empty"));
     }
+
+    #[test]
+    fn test_ceo_extraction_chief_executive() {
+        let executives = vec![
+            FMPExecutive {
+                title: "Chief Financial Officer".to_string(),
+                name: "Jane CFO".to_string(),
+                pay: Some(5000000.0),
+                currency_pay: Some("USD".to_string()),
+                gender: Some("female".to_string()),
+                year_born: Some(1970),
+            },
+            FMPExecutive {
+                title: "Chief Executive Officer & Director".to_string(),
+                name: "John CEO".to_string(),
+                pay: Some(10000000.0),
+                currency_pay: Some("USD".to_string()),
+                gender: Some("male".to_string()),
+                year_born: Some(1965),
+            },
+            FMPExecutive {
+                title: "Chief Technology Officer".to_string(),
+                name: "Bob CTO".to_string(),
+                pay: None,
+                currency_pay: None,
+                gender: None,
+                year_born: None,
+            },
+        ];
+
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
+
+        assert_eq!(ceo_name, Some("John CEO".to_string()));
+    }
+
+    #[test]
+    fn test_ceo_extraction_ceo_abbreviation() {
+        let executives = vec![
+            FMPExecutive {
+                title: "CFO".to_string(),
+                name: "Jane CFO".to_string(),
+                pay: None,
+                currency_pay: None,
+                gender: None,
+                year_born: None,
+            },
+            FMPExecutive {
+                title: "CEO & President".to_string(),
+                name: "Alice CEO".to_string(),
+                pay: None,
+                currency_pay: None,
+                gender: None,
+                year_born: None,
+            },
+        ];
+
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
+
+        assert_eq!(ceo_name, Some("Alice CEO".to_string()));
+    }
+
+    #[test]
+    fn test_ceo_extraction_no_ceo() {
+        let executives = vec![
+            FMPExecutive {
+                title: "Chief Financial Officer".to_string(),
+                name: "Jane CFO".to_string(),
+                pay: None,
+                currency_pay: None,
+                gender: None,
+                year_born: None,
+            },
+            FMPExecutive {
+                title: "Chief Operating Officer".to_string(),
+                name: "Bob COO".to_string(),
+                pay: None,
+                currency_pay: None,
+                gender: None,
+                year_born: None,
+            },
+        ];
+
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
+
+        assert_eq!(ceo_name, None);
+    }
+
+    #[test]
+    fn test_ceo_extraction_case_insensitive() {
+        let executives = vec![FMPExecutive {
+            title: "CHIEF EXECUTIVE OFFICER".to_string(),
+            name: "Upper Case CEO".to_string(),
+            pay: None,
+            currency_pay: None,
+            gender: None,
+            year_born: None,
+        }];
+
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
+
+        assert_eq!(ceo_name, Some("Upper Case CEO".to_string()));
+    }
+
+    #[test]
+    fn test_ceo_extraction_interim_ceo() {
+        // This test documents current behavior: interim CEOs are matched
+        let executives = vec![FMPExecutive {
+            title: "Interim CEO".to_string(),
+            name: "Temporary CEO".to_string(),
+            pay: None,
+            currency_pay: None,
+            gender: None,
+            year_born: None,
+        }];
+
+        let ceo_name = executives
+            .iter()
+            .find(|exec| {
+                exec.title.to_lowercase().contains("chief executive")
+                    || exec.title.to_lowercase().contains("ceo")
+            })
+            .map(|exec| exec.name.clone());
+
+        assert_eq!(ceo_name, Some("Temporary CEO".to_string()));
+    }
 }

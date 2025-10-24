@@ -300,4 +300,62 @@ mod tests {
         assert_eq!(deserialized.revenue, 365000000000.0);
         assert_eq!(deserialized.eps, 6.05);
     }
+
+    #[test]
+    fn test_fmp_executive_deserialization() {
+        let json = json!({
+            "title": "Chief Executive Officer & Director",
+            "name": "Mr. Timothy D. Cook",
+            "pay": 16239562,
+            "currencyPay": "USD",
+            "gender": "male",
+            "yearBorn": 1961
+        });
+
+        let executive: FMPExecutive = serde_json::from_value(json).unwrap();
+        assert_eq!(executive.title, "Chief Executive Officer & Director");
+        assert_eq!(executive.name, "Mr. Timothy D. Cook");
+        assert_eq!(executive.pay, Some(16239562.0));
+        assert_eq!(executive.currency_pay, Some("USD".to_string()));
+        assert_eq!(executive.gender, Some("male".to_string()));
+        assert_eq!(executive.year_born, Some(1961));
+    }
+
+    #[test]
+    fn test_fmp_executive_with_missing_optional_fields() {
+        let json = json!({
+            "title": "Chief Financial Officer",
+            "name": "Ms. Jane Smith"
+        });
+
+        let executive: FMPExecutive = serde_json::from_value(json).unwrap();
+        assert_eq!(executive.title, "Chief Financial Officer");
+        assert_eq!(executive.name, "Ms. Jane Smith");
+        assert_eq!(executive.pay, None);
+        assert_eq!(executive.currency_pay, None);
+        assert_eq!(executive.gender, None);
+        assert_eq!(executive.year_born, None);
+    }
+
+    #[test]
+    fn test_fmp_executive_list_deserialization() {
+        let json = json!([
+            {
+                "title": "Chief Executive Officer",
+                "name": "John CEO"
+            },
+            {
+                "title": "Chief Financial Officer",
+                "name": "Jane CFO",
+                "pay": 5000000,
+                "currencyPay": "USD"
+            }
+        ]);
+
+        let executives: Vec<FMPExecutive> = serde_json::from_value(json).unwrap();
+        assert_eq!(executives.len(), 2);
+        assert_eq!(executives[0].title, "Chief Executive Officer");
+        assert_eq!(executives[1].title, "Chief Financial Officer");
+        assert_eq!(executives[1].pay, Some(5000000.0));
+    }
 }
