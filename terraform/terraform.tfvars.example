@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Copy this file to terraform.tfvars and fill in your values
+
+project_id  = "your-gcp-project-id"
+region      = "europe-west1"
+environment = "prod"

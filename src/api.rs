@@ -376,8 +376,12 @@ impl PolygonClient {
 }
 
 pub async fn get_details_eu(ticker: &str, rate_map: &HashMap<String, f64>) -> Result<Details> {
-    let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env(
+        "financialmodelingprep-api-key",
+        "FINANCIALMODELINGPREP_API_KEY",
+    )
+    .await
+    .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
     let client = FMPClient::new(api_key);
     client.get_details(ticker, rate_map).await
 }

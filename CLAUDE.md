@@ -27,13 +27,49 @@ nix develop --command cargo run
 
 ### Environment Variables
 
+The application supports two ways to manage secrets:
+
+#### Option 1: Local Development (Environment Variables)
+
 Create a `.env` file in the project root with:
 
 ```env
-FMP_API_KEY=your_api_key_here
 FINANCIALMODELINGPREP_API_KEY=your_api_key_here
+POLYGON_API_KEY=your_polygon_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+BREVO_API_KEY=your_brevo_key_here
 DATABASE_URL=sqlite:data.db  # Optional, defaults to sqlite:data.db
 ```
+
+#### Option 2: Production (Google Secret Manager)
+
+For production deployments, use Google Secret Manager:
+
+```bash
+# Set your GCP project ID
+export GCP_PROJECT_ID=your-project-id
+
+# Setup secrets (run once)
+./scripts/setup-secrets.sh
+
+# For local development with GCP
+gcloud auth application-default login
+
+# Or use a service account key
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+```
+
+The application will automatically:
+1. Try to load from environment variables first (for local dev)
+2. Fall back to Google Secret Manager (for production)
+
+Secrets are stored with these names in Secret Manager:
+- `financialmodelingprep-api-key`
+- `polygon-api-key`
+- `anthropic-api-key`
+- `brevo-api-key`
+
+See `scripts/README.md` for detailed setup instructions.
 
 ### Build Commands
 

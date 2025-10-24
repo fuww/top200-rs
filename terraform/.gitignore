@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: 2025 Joost van der Laan <joost@fashionunited.com>
+#
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Crash log files
+crash.log
+crash.*.log
+
+# Variable files that may contain sensitive data
+terraform.tfvars
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Service account key files
+*.json
+!terraform.tfvars.example
+
+# Terraform directory
+.terraform/
+.terraform.lock.hcl
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc

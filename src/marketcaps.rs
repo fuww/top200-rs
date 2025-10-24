@@ -139,8 +139,12 @@ async fn update_market_caps(pool: &SqlitePool) -> Result<()> {
     println!("✅ Exchange rates fetched from database");
 
     // Get FMP client for market data
-    let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
-        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env(
+        "financialmodelingprep-api-key",
+        "FINANCIALMODELINGPREP_API_KEY",
+    )
+    .await
+    .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
     let fmp_client = Arc::new(api::FMPClient::new(api_key));
 
     // Create a rate_map Arc for sharing between tasks
@@ -293,8 +297,12 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
 /// Main entry point for market cap functionality
 pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
     // First update currencies and exchange rates
-    let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
-        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env(
+        "financialmodelingprep-api-key",
+        "FINANCIALMODELINGPREP_API_KEY",
+    )
+    .await
+    .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
     let fmp_client = api::FMPClient::new(api_key);
 
     println!("Updating currencies and exchange rates...");

@@ -14,6 +14,7 @@ mod historical_marketcaps;
 mod marketcaps;
 mod models;
 mod monthly_historical_marketcaps;
+mod secrets;
 mod specific_date_marketcaps;
 mod symbol_changes;
 mod ticker_details;
@@ -109,8 +110,12 @@ async fn main() -> Result<()> {
         Some(Commands::ListUs) => details_us_polygon::list_details_us(&pool).await?,
         Some(Commands::ListEu) => details_eu_fmp::list_details_eu(&pool).await?,
         Some(Commands::ExportRates) => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let api_key = secrets::get_secret_or_env(
+                "financialmodelingprep-api-key",
+                "FINANCIALMODELINGPREP_API_KEY",
+            )
+            .await
+            .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
             let fmp_client = api::FMPClient::new(api_key);
             exchange_rates::update_exchange_rates(&fmp_client, &pool).await?;
         }
@@ -133,8 +138,12 @@ async fn main() -> Result<()> {
             specific_date_marketcaps::fetch_specific_date_marketcaps(&pool, &date).await?;
         }
         Some(Commands::AddCurrency { code, name }) => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let api_key = secrets::get_secret_or_env(
+                "financialmodelingprep-api-key",
+                "FINANCIALMODELINGPREP_API_KEY",
+            )
+            .await
+            .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
             let fmp_client = api::FMPClient::new(api_key);
             currencies::update_currencies(&fmp_client, &pool).await?;
             println!("✅ Currencies updated from FMP API");
@@ -156,9 +165,16 @@ async fn main() -> Result<()> {
             visualizations::generate_all_charts(&from, &to).await?;
         }
         Some(Commands::CheckSymbolChanges { config }) => {
-            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
-                .or_else(|_| env::var("FMP_API_KEY"))
-                .expect("FINANCIALMODELINGPREP_API_KEY or FMP_API_KEY must be set");
+            let api_key = secrets::get_secret_or_env(
+                "financialmodelingprep-api-key",
+                "FINANCIALMODELINGPREP_API_KEY",
+            )
+            .await
+            .or_else(|_| {
+                secrets::get_secret_or_env("fmp-api-key", "FMP_API_KEY")
+            })
+            .await
+            .expect("FINANCIALMODELINGPREP_API_KEY or FMP_API_KEY must be set in environment or Secret Manager");
             let fmp_client = api::FMPClient::new(api_key);
 
             // Fetch and store latest symbol changes

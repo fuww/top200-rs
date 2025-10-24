@@ -20,8 +20,12 @@ pub async fn fetch_monthly_historical_marketcaps(
     let tickers = [config.non_us_tickers, config.us_tickers].concat();
 
     // Get FMP client for market data
-    let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
-        .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env(
+        "financialmodelingprep-api-key",
+        "FINANCIALMODELINGPREP_API_KEY",
+    )
+    .await
+    .expect("FINANCIALMODELINGPREP_API_KEY must be set in environment or Secret Manager");
     let fmp_client = Arc::new(api::FMPClient::new(api_key));
 
     println!(

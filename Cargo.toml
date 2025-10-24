@@ -25,6 +25,10 @@ futures = "0.3"
 clap = { version = "4.5.1", features = ["derive"] }
 glob = "0.3.1"
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate", "any"] }
+google-secretmanager1 = "6.0.0"
+hyper = "0.14"
+hyper-rustls = { version = "0.24", features = ["webpki-tokio"] }
+yup-oauth2 = "9.0"
 
 [dev-dependencies]
 tempfile = "3.8.1"

@@ -12,7 +12,9 @@ use std::{env, path::PathBuf, sync::Arc};
 pub async fn export_details_us_csv(_pool: &SqlitePool) -> Result<()> {
     let config = config::load_config()?;
     let tickers = config.us_tickers;
-    let api_key = env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env("polygon-api-key", "POLYGON_API_KEY")
+        .await
+        .expect("POLYGON_API_KEY must be set in environment or Secret Manager");
     let client = Arc::new(PolygonClient::new(api_key));
     let date = NaiveDate::from_ymd_opt(2023, 11, 1).unwrap();
 
@@ -109,7 +111,9 @@ pub async fn export_details_us_csv(_pool: &SqlitePool) -> Result<()> {
 pub async fn list_details_us(_pool: &SqlitePool) -> Result<()> {
     let config = config::load_config()?;
     let tickers = config.us_tickers;
-    let api_key = env::var("POLYGON_API_KEY").expect("POLYGON_API_KEY must be set");
+    let api_key = crate::secrets::get_secret_or_env("polygon-api-key", "POLYGON_API_KEY")
+        .await
+        .expect("POLYGON_API_KEY must be set in environment or Secret Manager");
     let client = Arc::new(PolygonClient::new(api_key));
     let date = NaiveDate::from_ymd_opt(2023, 11, 1).unwrap();
 
