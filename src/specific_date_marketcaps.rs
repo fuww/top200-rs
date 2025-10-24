@@ -202,10 +202,10 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
             (index + 1).to_string(),
             record.ticker.clone(),
             record.name.clone(),
-            record.market_cap_original.unwrap_or(0.0).to_string(),
+            format!("{:.0}", record.market_cap_original.unwrap_or(0.0)),
             record.original_currency.clone().unwrap_or_default(),
-            record.market_cap_eur.unwrap_or(0.0).to_string(),
-            record.market_cap_usd.unwrap_or(0.0).to_string(),
+            format!("{:.0}", record.market_cap_eur.unwrap_or(0.0)),
+            format!("{:.0}", record.market_cap_usd.unwrap_or(0.0)),
             record.price.unwrap_or(0.0).to_string(),
             record.exchange.clone().unwrap_or_default(),
             if record.active.unwrap_or(true) {

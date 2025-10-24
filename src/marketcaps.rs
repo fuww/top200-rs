@@ -105,10 +105,10 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
                     r.ticker.clone(),
                     r.ticker,
                     r.name,
-                    r.market_cap_original.unwrap_or(0.0).to_string(),
+                    format!("{:.0}", r.market_cap_original.unwrap_or(0.0)),
                     r.original_currency.unwrap_or_default(),
-                    r.market_cap_eur.unwrap_or(0.0).to_string(),
-                    r.market_cap_usd.unwrap_or(0.0).to_string(),
+                    format!("{:.0}", r.market_cap_eur.unwrap_or(0.0)),
+                    format!("{:.0}", r.market_cap_usd.unwrap_or(0.0)),
                     r.exchange.unwrap_or_default(),
                     if r.active.unwrap_or(true) {
                         "true".to_string()
