@@ -4,7 +4,7 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db};
+use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::Writer;
@@ -22,6 +22,7 @@ pub async fn fetch_specific_date_marketcaps(pool: &SqlitePool, date_str: &str) -
 
     let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
     let datetime_utc = naive_dt.and_utc();
+    let timestamp = naive_dt.and_utc().timestamp();
 
     // Get FMP client for market data
     let api_key = std::env::var("FINANCIALMODELINGPREP_API_KEY")
@@ -30,10 +31,20 @@ pub async fn fetch_specific_date_marketcaps(pool: &SqlitePool, date_str: &str) -
 
     println!("Fetching market caps for date: {}", date);
 
-    // Get exchange rates
-    println!("Fetching exchange rates from database...");
-    let rate_map = get_rate_map_from_db(pool).await?;
-    println!("✅ Exchange rates fetched from database");
+    // Get exchange rates FOR THE SPECIFIC DATE (or closest date before it)
+    println!("Fetching exchange rates for {} from database...", date);
+    let rate_map = get_rate_map_from_db_for_date(pool, Some(timestamp)).await?;
+
+    if rate_map.is_empty() {
+        eprintln!(
+            "⚠️  WARNING: No exchange rates found for date {} or earlier!",
+            date
+        );
+        eprintln!("    Currency conversions will be inaccurate.");
+        eprintln!("    Run 'ExportRates' command to fetch current rates first.");
+    } else {
+        println!("✅ Exchange rates fetched for {}", date);
+    }
 
     let total_tickers = tickers.len();
     let progress = ProgressBar::new(total_tickers as u64);

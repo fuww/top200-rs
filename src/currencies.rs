@@ -41,16 +41,29 @@ pub async fn list_currencies(pool: &SqlitePool) -> Result<Vec<(String, String)>>
     Ok(records)
 }
 
-/// Get a map of exchange rates between currencies from the database
+/// Get a map of exchange rates between currencies from the database (latest rates)
 pub async fn get_rate_map_from_db(pool: &SqlitePool) -> Result<HashMap<String, f64>> {
+    get_rate_map_from_db_for_date(pool, None).await
+}
+
+/// Get a map of exchange rates for a specific date (or latest if None)
+pub async fn get_rate_map_from_db_for_date(
+    pool: &SqlitePool,
+    timestamp: Option<i64>,
+) -> Result<HashMap<String, f64>> {
     let mut rate_map = HashMap::new();
 
     // Get all unique symbols from the database
     let symbols = list_forex_symbols(pool).await?;
 
-    // Get latest rates for each symbol
+    // Get rates for each symbol (either for specific date or latest)
     for symbol in symbols {
-        if let Some((ask, _bid, _timestamp)) = get_latest_forex_rate(pool, &symbol).await? {
+        let rate_result = match timestamp {
+            Some(ts) => get_forex_rate_for_date(pool, &symbol, ts).await?,
+            None => get_latest_forex_rate(pool, &symbol).await?,
+        };
+
+        if let Some((ask, _bid, _timestamp)) = rate_result {
             let (from, to) = symbol.split_once('/').unwrap();
             rate_map.insert(format!("{}/{}", from, to), ask);
             rate_map.insert(format!("{}/{}", to, from), 1.0 / ask);
@@ -191,6 +204,30 @@ pub async fn get_latest_forex_rate(
         "#,
     )
     .bind(symbol)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(record)
+}
+
+/// Get forex rate for a specific date (or closest date before it)
+pub async fn get_forex_rate_for_date(
+    pool: &SqlitePool,
+    symbol: &str,
+    timestamp: i64,
+) -> Result<Option<(f64, f64, i64)>> {
+    let record = sqlx::query_as::<_, (f64, f64, i64)>(
+        r#"
+        SELECT ask, bid, timestamp
+        FROM forex_rates
+        WHERE symbol = ?
+        AND timestamp <= ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(symbol)
+    .bind(timestamp)
     .fetch_optional(pool)
     .await?;
 
