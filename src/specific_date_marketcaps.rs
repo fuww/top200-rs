@@ -145,6 +145,9 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
     let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
     let timestamp = naive_dt.and_utc().timestamp();
 
+    // Get exchange rates for the specific date
+    let rate_map = get_rate_map_from_db_for_date(pool, Some(timestamp)).await?;
+
     // Fetch market caps for the specific date
     let records = sqlx::query!(
         r#"
@@ -195,6 +198,8 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
         "Name",
         "Market Cap (Original)",
         "Original Currency",
+        "Exchange Rate to EUR",
+        "Exchange Rate to USD",
         "Market Cap (EUR)",
         "Market Cap (USD)",
         "Price",
@@ -209,12 +214,55 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
 
     // Write data with rank
     for (index, record) in records.iter().enumerate() {
+        let original_currency = record.original_currency.clone().unwrap_or_default();
+
+        // Get exchange rates used for this currency
+        let rate_to_eur = if original_currency == "EUR" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/EUR", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("EUR/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
+        let rate_to_usd = if original_currency == "USD" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/USD", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("USD/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
         writer.write_record(&[
             (index + 1).to_string(),
             record.ticker.clone(),
             record.name.clone(),
             format!("{:.0}", record.market_cap_original.unwrap_or(0.0)),
-            record.original_currency.clone().unwrap_or_default(),
+            original_currency,
+            if rate_to_eur > 0.0 {
+                format!("{:.6}", rate_to_eur)
+            } else {
+                "N/A".to_string()
+            },
+            if rate_to_usd > 0.0 {
+                format!("{:.6}", rate_to_usd)
+            } else {
+                "N/A".to_string()
+            },
             format!("{:.0}", record.market_cap_eur.unwrap_or(0.0)),
             format!("{:.0}", record.market_cap_usd.unwrap_or(0.0)),
             record.price.unwrap_or(0.0).to_string(),

@@ -206,6 +206,9 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
     let mut results = get_market_caps(pool).await?;
     println!("✅ Market cap data fetched from database");
 
+    // Get exchange rates from database
+    let rate_map = get_rate_map_from_db(pool).await?;
+
     // Sort by EUR market cap
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -222,6 +225,8 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Name",
         "Market Cap (Original)",
         "Original Currency",
+        "Exchange Rate to EUR",
+        "Exchange Rate to USD",
         "Market Cap (EUR)",
         "Market Cap (USD)",
         "Exchange",
@@ -235,7 +240,55 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
 
     // Write data
     for (_, record) in &results {
-        writer.write_record(record)?;
+        let original_currency = &record[4]; // Original Currency column
+
+        // Get exchange rates used for this currency
+        let rate_to_eur = if original_currency == "EUR" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/EUR", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("EUR/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
+        let rate_to_usd = if original_currency == "USD" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/USD", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("USD/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
+        // Build new record with exchange rates
+        let mut new_record = Vec::new();
+        new_record.extend_from_slice(&record[0..5]); // Symbol, Ticker, Name, Market Cap (Original), Original Currency
+        new_record.push(if rate_to_eur > 0.0 {
+            format!("{:.6}", rate_to_eur)
+        } else {
+            "N/A".to_string()
+        });
+        new_record.push(if rate_to_usd > 0.0 {
+            format!("{:.6}", rate_to_usd)
+        } else {
+            "N/A".to_string()
+        });
+        new_record.extend_from_slice(&record[5..]); // Market Cap (EUR), Market Cap (USD), Exchange, Active, Description, Homepage URL, Employees, CEO, Timestamp
+
+        writer.write_record(&new_record)?;
     }
 
     println!("✅ Market cap data exported to {}", filename);
@@ -246,6 +299,9 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
 pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     // Get market cap data from database
     let mut results = get_market_caps(pool).await?;
+
+    // Get exchange rates from database
+    let rate_map = get_rate_map_from_db(pool).await?;
 
     // Sort by EUR market cap
     results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -270,6 +326,8 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Name",
         "Market Cap (Original)",
         "Original Currency",
+        "Exchange Rate to EUR",
+        "Exchange Rate to USD",
         "Market Cap (EUR)",
         "Market Cap (USD)",
         "Exchange",
@@ -283,7 +341,55 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
 
     // Write data
     for (_, record) in active_results {
-        writer.write_record(record)?;
+        let original_currency = &record[4]; // Original Currency column
+
+        // Get exchange rates used for this currency
+        let rate_to_eur = if original_currency == "EUR" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/EUR", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("EUR/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
+        let rate_to_usd = if original_currency == "USD" {
+            1.0
+        } else {
+            rate_map
+                .get(&format!("{}/USD", original_currency))
+                .copied()
+                .unwrap_or_else(|| {
+                    // Try reverse rate
+                    rate_map
+                        .get(&format!("USD/{}", original_currency))
+                        .map(|r| 1.0 / r)
+                        .unwrap_or(0.0)
+                })
+        };
+
+        // Build new record with exchange rates
+        let mut new_record = Vec::new();
+        new_record.extend_from_slice(&record[0..5]); // Symbol, Ticker, Name, Market Cap (Original), Original Currency
+        new_record.push(if rate_to_eur > 0.0 {
+            format!("{:.6}", rate_to_eur)
+        } else {
+            "N/A".to_string()
+        });
+        new_record.push(if rate_to_usd > 0.0 {
+            format!("{:.6}", rate_to_usd)
+        } else {
+            "N/A".to_string()
+        });
+        new_record.extend_from_slice(&record[5..]); // Market Cap (EUR), Market Cap (USD), Exchange, Active, Description, Homepage URL, Employees, CEO, Timestamp
+
+        writer.write_record(&new_record)?;
     }
 
     println!("✅ Top 100 active companies exported to {}", filename);
