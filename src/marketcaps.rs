@@ -98,7 +98,7 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
     let results = records
         .into_iter()
         .map(|r| {
-            let market_cap_eur = r.market_cap_eur.unwrap_or(0.0) as f64;
+            let market_cap_eur = r.market_cap_eur.unwrap_or(0.0);
             (
                 market_cap_eur,
                 vec![
@@ -216,7 +216,7 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Symbol",
         "Ticker",
         "Name",
@@ -264,7 +264,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Symbol",
         "Ticker",
         "Name",

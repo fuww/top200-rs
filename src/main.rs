@@ -24,7 +24,6 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 // use sqlx::sqlite::SqlitePool;
 use std::env;
-use tokio;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -204,5 +203,4 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 }

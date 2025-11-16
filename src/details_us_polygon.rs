@@ -26,7 +26,7 @@ pub async fn export_details_us_csv(_pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_path(&csv_path)?;
 
     // Write header
-    writer.write_record(&[
+    writer.write_record([
         "Ticker",
         "Company Name",
         "Market Cap",
@@ -54,7 +54,7 @@ pub async fn export_details_us_csv(_pool: &SqlitePool) -> Result<()> {
         );
         match client.get_details(ticker, date).await {
             Ok(details) => {
-                writer.write_record(&[
+                writer.write_record([
                     &details.ticker,
                     &details.name.unwrap_or_default(),
                     &details
@@ -93,8 +93,8 @@ pub async fn export_details_us_csv(_pool: &SqlitePool) -> Result<()> {
                 eprintln!("Error fetching details for {}: {}", ticker, e);
                 // Write empty row for failed ticker
                 let error_msg = format!("Error: {}", e);
-                writer.write_record(&[
-                    &ticker, "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "", "",
+                writer.write_record([
+                    ticker, "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "", "",
                 ])?;
             }
         }

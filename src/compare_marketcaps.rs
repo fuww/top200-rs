@@ -358,7 +358,7 @@ fn export_comparison_csv(
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Ticker",
         "Name",
         "Market Cap From (USD)",
@@ -374,7 +374,7 @@ fn export_comparison_csv(
 
     // Write data
     for comp in comparisons {
-        writer.write_record(&[
+        writer.write_record([
             comp.ticker.clone(),
             comp.name.clone(),
             comp.market_cap_from

@@ -76,6 +76,7 @@ pub struct FMPCompanyProfile {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct FMPExecutive {
     pub title: String,
     pub name: String,
@@ -116,6 +117,7 @@ pub struct FMPIncomeStatement {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Stock {
     pub ticker: String,
     pub name: String,

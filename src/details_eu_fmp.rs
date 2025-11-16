@@ -9,7 +9,6 @@ use chrono::Local;
 use csv::Writer;
 use sqlx::sqlite::SqlitePool;
 use std::path::PathBuf;
-use tokio;
 
 pub async fn export_details_eu_csv(pool: &SqlitePool) -> Result<()> {
     let config = config::load_config()?;
@@ -25,7 +24,7 @@ pub async fn export_details_eu_csv(pool: &SqlitePool) -> Result<()> {
     let mut writer = Writer::from_path(&csv_path)?;
 
     // Write header
-    writer.write_record(&[
+    writer.write_record([
         "Ticker",
         "Company Name",
         "Market Cap",
@@ -63,7 +62,7 @@ pub async fn export_details_eu_csv(pool: &SqlitePool) -> Result<()> {
         let (ticker, details) = task.await?;
         match details {
             Ok(details) => {
-                writer.write_record(&[
+                writer.write_record([
                     &details.ticker,
                     &details.name.unwrap_or_default(),
                     &details
@@ -113,7 +112,7 @@ pub async fn export_details_eu_csv(pool: &SqlitePool) -> Result<()> {
                 eprintln!("Error fetching details for {}: {}", ticker, e);
                 // Write empty row for failed ticker
                 let error_msg = format!("Error: {}", e);
-                writer.write_record(&[
+                writer.write_record([
                     &ticker, "", "", "", "", "", "", &error_msg, "", "", "", "", "", "", "", "", "",
                 ])?;
             }

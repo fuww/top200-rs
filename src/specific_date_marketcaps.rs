@@ -189,7 +189,7 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
     let mut writer = Writer::from_writer(file);
 
     // Write headers
-    writer.write_record(&[
+    writer.write_record([
         "Rank",
         "Ticker",
         "Name",
@@ -209,7 +209,7 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
 
     // Write data with rank
     for (index, record) in records.iter().enumerate() {
-        writer.write_record(&[
+        writer.write_record([
             (index + 1).to_string(),
             record.ticker.clone(),
             record.name.clone(),
