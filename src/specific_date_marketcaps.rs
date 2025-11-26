@@ -4,13 +4,18 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
+use crate::currencies::{convert_currency_with_rate, get_rate_map_from_db_for_date};
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
 use csv::Writer;
 use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
+
+/// Format a conversion rate for display (6 decimal places, or empty if not available)
+fn format_rate(rate: Option<f64>) -> String {
+    rate.map(|r| format!("{:.6}", r)).unwrap_or_default()
+}
 
 pub async fn fetch_specific_date_marketcaps(pool: &SqlitePool, date_str: &str) -> Result<()> {
     let config = config::load_config()?;
@@ -66,15 +71,15 @@ pub async fn fetch_specific_date_marketcaps(pool: &SqlitePool, date_str: &str) -
             .await
         {
             Ok(market_cap) => {
-                // Convert currencies
-                let market_cap_eur = convert_currency(
+                // Convert currencies with rate information
+                let eur_result = convert_currency_with_rate(
                     market_cap.market_cap_original,
                     &market_cap.original_currency,
                     "EUR",
                     &rate_map,
                 );
 
-                let market_cap_usd = convert_currency(
+                let usd_result = convert_currency_with_rate(
                     market_cap.market_cap_original,
                     &market_cap.original_currency,
                     "USD",
@@ -84,22 +89,24 @@ pub async fn fetch_specific_date_marketcaps(pool: &SqlitePool, date_str: &str) -
                 // Store the Unix timestamp of the historical date
                 let timestamp = naive_dt.and_utc().timestamp();
 
-                // Insert into database
+                // Insert into database with conversion rates
                 sqlx::query!(
                     r#"
                     INSERT OR REPLACE INTO market_caps (
                         ticker, name, market_cap_original, original_currency,
-                        market_cap_eur, market_cap_usd, exchange, price,
-                        active, timestamp
+                        market_cap_eur, market_cap_usd, eur_rate, usd_rate,
+                        exchange, price, active, timestamp
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     "#,
                     ticker,
                     market_cap.name,
                     market_cap.market_cap_original,
                     market_cap.original_currency,
-                    market_cap_eur,
-                    market_cap_usd,
+                    eur_result.amount,
+                    usd_result.amount,
+                    eur_result.rate,
+                    usd_result.rate,
                     market_cap.exchange,
                     market_cap.price,
                     true,
@@ -155,6 +162,8 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
             m.original_currency,
             CAST(m.market_cap_eur AS REAL) as market_cap_eur,
             CAST(m.market_cap_usd AS REAL) as market_cap_usd,
+            CAST(m.eur_rate AS REAL) as eur_rate,
+            CAST(m.usd_rate AS REAL) as usd_rate,
             m.exchange,
             m.active,
             CAST(m.price AS REAL) as price,
@@ -196,7 +205,9 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
         "Market Cap (Original)",
         "Original Currency",
         "Market Cap (EUR)",
+        "EUR Rate",
         "Market Cap (USD)",
+        "USD Rate",
         "Price",
         "Exchange",
         "Active",
@@ -216,7 +227,9 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
             format!("{:.0}", record.market_cap_original.unwrap_or(0.0)),
             record.original_currency.clone().unwrap_or_default(),
             format!("{:.0}", record.market_cap_eur.unwrap_or(0.0)),
+            format_rate(record.eur_rate),
             format!("{:.0}", record.market_cap_usd.unwrap_or(0.0)),
+            format_rate(record.usd_rate),
             record.price.unwrap_or(0.0).to_string(),
             record.exchange.clone().unwrap_or_default(),
             if record.active.unwrap_or(true) {

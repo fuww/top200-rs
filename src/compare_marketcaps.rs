@@ -8,7 +8,7 @@ use csv::{Reader, Writer};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use sqlx::sqlite::SqlitePool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
@@ -305,14 +305,30 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
         b_pct.partial_cmp(&a_pct).unwrap()
     });
 
+    // Collect unique currencies used in the data
+    let mut currencies_used: HashSet<String> = HashSet::new();
+    for record in from_records.iter().chain(to_records.iter()) {
+        if let Some(currency) = &record.original_currency {
+            if currency != "USD" {
+                currencies_used.insert(currency.clone());
+            }
+        }
+    }
+
     progress.inc(1);
     progress.finish_with_message("Analysis complete");
 
     // Export main comparison CSV
     export_comparison_csv(&comparisons, from_date, to_date)?;
 
-    // Export summary report
-    export_summary_report(&comparisons, from_date, to_date)?;
+    // Export summary report with exchange rates information
+    export_summary_report(
+        &comparisons,
+        from_date,
+        to_date,
+        &normalization_rates,
+        &currencies_used,
+    )?;
 
     Ok(())
 }
@@ -399,6 +415,8 @@ fn export_summary_report(
     comparisons: &[MarketCapComparison],
     from_date: &str,
     to_date: &str,
+    rate_map: &HashMap<String, f64>,
+    currencies_used: &HashSet<String>,
 ) -> Result<()> {
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let filename = format!(
@@ -634,6 +652,50 @@ fn export_summary_report(
         "- Companies no longer in list: {}",
         delisted_companies
     )?;
+    writeln!(file)?;
+
+    // Exchange rates section
+    writeln!(file, "## Exchange Rates Used for Normalization")?;
+    writeln!(file)?;
+    writeln!(
+        file,
+        "All values in this report are normalized to USD using exchange rates from **{}**.",
+        to_date
+    )?;
+    writeln!(
+        file,
+        "This eliminates currency fluctuations and shows pure market cap changes."
+    )?;
+    writeln!(file)?;
+
+    if currencies_used.is_empty() {
+        writeln!(
+            file,
+            "_All companies are USD-denominated, no currency conversion needed._"
+        )?;
+    } else {
+        writeln!(file, "| Currency | Rate to USD |")?;
+        writeln!(file, "|----------|-------------|")?;
+
+        // Sort currencies for consistent output
+        let mut sorted_currencies: Vec<_> = currencies_used.iter().collect();
+        sorted_currencies.sort();
+
+        for currency in sorted_currencies {
+            let rate_key = format!("{}/USD", currency);
+            if let Some(&rate) = rate_map.get(&rate_key) {
+                writeln!(file, "| {} | {:.6} |", currency, rate)?;
+            } else {
+                // Try reverse lookup
+                let reverse_key = format!("USD/{}", currency);
+                if let Some(&rate) = rate_map.get(&reverse_key) {
+                    writeln!(file, "| {} | {:.6} |", currency, 1.0 / rate)?;
+                } else {
+                    writeln!(file, "| {} | _not available_ |", currency)?;
+                }
+            }
+        }
+    }
 
     writeln!(file)?;
     writeln!(file, "---")?;
