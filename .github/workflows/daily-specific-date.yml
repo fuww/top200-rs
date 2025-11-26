@@ -171,6 +171,10 @@ jobs:
           GITHUB_RUN_URL: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           GITHUB_RUN_NUMBER: "${{ github.run_number }}"
           GITHUB_SHA: "${{ github.sha }}"
+          GITHUB_REPOSITORY: "${{ github.repository }}"
+          GITHUB_RUN_ID: "${{ github.run_id }}"
+          # Artifact name for direct download links
+          ARTIFACT_NAME: "market-data-multi-period-${{ steps.get-dates.outputs.today }}-run-${{ github.run_number }}"
           # Pass the dates as environment variables for the script
           TODAY_DATE: "${{ steps.get-dates.outputs.today }}"
           WEEK_AGO_DATE: "${{ steps.get-dates.outputs.week_ago }}"
