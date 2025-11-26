@@ -156,6 +156,21 @@ cargo run -- fetch-historical-market-caps 2023 2025
 cargo run -- fetch-monthly-historical-market-caps 2023 2025
 ```
 
+Backfill historical exchange rates:
+
+```bash
+# Fetch historical exchange rates for a date range
+cargo run -- fetch-historical-exchange-rates --from 2024-01-01 --to 2024-12-31
+
+# This will:
+# - Fetch daily exchange rates for common currency pairs (EUR, GBP, JPY, CHF, etc.)
+# - Store rates in the database with their respective dates
+# - Enable accurate historical market cap comparisons with correct FX rates
+
+# Backfill last year of exchange rates
+cargo run -- fetch-historical-exchange-rates --from $(date -d "1 year ago" +%Y-%m-%d) --to $(date +%Y-%m-%d)
+```
+
 ## Database Browsing
 
 ### Accessing the SQLite Database

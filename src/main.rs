@@ -47,6 +47,15 @@ enum Commands {
     ListEu,
     /// Export exchange rates to CSV
     ExportRates,
+    /// Fetch historical exchange rates for a date range
+    FetchHistoricalExchangeRates {
+        /// Start date (YYYY-MM-DD format)
+        #[arg(long)]
+        from: String,
+        /// End date (YYYY-MM-DD format)
+        #[arg(long)]
+        to: String,
+    },
     /// Fetch historical market caps
     FetchHistoricalMarketCaps { start_year: i32, end_year: i32 },
     /// Fetch monthly historical market caps
@@ -113,6 +122,12 @@ async fn main() -> Result<()> {
                 .expect("FINANCIALMODELINGPREP_API_KEY must be set");
             let fmp_client = api::FMPClient::new(api_key);
             exchange_rates::update_exchange_rates(&fmp_client, &pool).await?;
+        }
+        Some(Commands::FetchHistoricalExchangeRates { from, to }) => {
+            let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
+                .expect("FINANCIALMODELINGPREP_API_KEY must be set");
+            let fmp_client = api::FMPClient::new(api_key);
+            exchange_rates::fetch_historical_exchange_rates(&fmp_client, &pool, &from, &to).await?;
         }
         Some(Commands::FetchHistoricalMarketCaps {
             start_year,
