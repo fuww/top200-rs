@@ -3,7 +3,7 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db, update_currencies};
+use crate::currencies::{convert_currency_with_rate, get_rate_map_from_db, update_currencies};
 use crate::exchange_rates;
 use crate::models;
 use crate::ticker_details::{self, TickerDetails};
@@ -14,6 +14,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 
+/// Format a conversion rate for display (6 decimal places, or empty if not available)
+fn format_rate(rate: Option<f64>) -> String {
+    rate.map(|r| format!("{:.6}", r)).unwrap_or_default()
+}
+
 /// Store market cap data in the database
 async fn store_market_cap(
     pool: &SqlitePool,
@@ -23,10 +28,18 @@ async fn store_market_cap(
 ) -> Result<()> {
     let original_market_cap = details.market_cap.unwrap_or(0.0) as i64;
     let currency = details.currency_symbol.clone().unwrap_or_default();
-    let eur_market_cap =
-        convert_currency(original_market_cap as f64, &currency, "EUR", rate_map) as i64;
-    let usd_market_cap =
-        convert_currency(original_market_cap as f64, &currency, "USD", rate_map) as i64;
+
+    // Convert with rate information
+    let eur_result =
+        convert_currency_with_rate(original_market_cap as f64, &currency, "EUR", rate_map);
+    let usd_result =
+        convert_currency_with_rate(original_market_cap as f64, &currency, "USD", rate_map);
+
+    let eur_market_cap = eur_result.amount as i64;
+    let usd_market_cap = usd_result.amount as i64;
+    let eur_rate = eur_result.rate;
+    let usd_rate = usd_result.rate;
+
     let name = details.name.as_ref().unwrap_or(&String::new()).to_string();
     let currency_name = details
         .currency_name
@@ -35,13 +48,13 @@ async fn store_market_cap(
         .to_string();
     let active = details.active.unwrap_or(true);
 
-    // Store market cap data
+    // Store market cap data with conversion rates
     sqlx::query!(
         r#"
         INSERT INTO market_caps (
             ticker, name, market_cap_original, original_currency, market_cap_eur, market_cap_usd,
-            exchange, active, timestamp
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            eur_rate, usd_rate, exchange, active, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         details.ticker,
         name,
@@ -49,6 +62,8 @@ async fn store_market_cap(
         currency,
         eur_market_cap,
         usd_market_cap,
+        eur_rate,
+        usd_rate,
         currency_name,
         active,
         timestamp,
@@ -73,13 +88,15 @@ async fn store_market_cap(
 async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
     let records = sqlx::query!(
         r#"
-        SELECT 
+        SELECT
             m.ticker as "ticker!",
             m.name as "name!",
             CAST(m.market_cap_original AS REAL) as market_cap_original,
             m.original_currency,
             CAST(m.market_cap_eur AS REAL) as market_cap_eur,
             CAST(m.market_cap_usd AS REAL) as market_cap_usd,
+            CAST(m.eur_rate AS REAL) as eur_rate,
+            CAST(m.usd_rate AS REAL) as usd_rate,
             m.exchange,
             m.active,
             strftime('%s', m.timestamp) as timestamp,
@@ -108,7 +125,9 @@ async fn get_market_caps(pool: &SqlitePool) -> Result<Vec<(f64, Vec<String>)>> {
                     format!("{:.0}", r.market_cap_original.unwrap_or(0.0)),
                     r.original_currency.unwrap_or_default(),
                     format!("{:.0}", r.market_cap_eur.unwrap_or(0.0)),
+                    format_rate(r.eur_rate),
                     format!("{:.0}", r.market_cap_usd.unwrap_or(0.0)),
+                    format_rate(r.usd_rate),
                     r.exchange.unwrap_or_default(),
                     if r.active.unwrap_or(true) {
                         "true".to_string()
@@ -223,7 +242,9 @@ pub async fn export_market_caps(pool: &SqlitePool) -> Result<()> {
         "Market Cap (Original)",
         "Original Currency",
         "Market Cap (EUR)",
+        "EUR Rate",
         "Market Cap (USD)",
+        "USD Rate",
         "Exchange",
         "Active",
         "Description",
@@ -253,7 +274,7 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
     // Filter for active companies first, then take top 100
     let active_results: Vec<_> = results
         .iter()
-        .filter(|(_, record)| record[8] == "true") // Active column
+        .filter(|(_, record)| record[10] == "true") // Active column (index shifted due to rate columns)
         .take(100)
         .collect();
 
@@ -271,7 +292,9 @@ pub async fn export_top_100_active(pool: &SqlitePool) -> Result<()> {
         "Market Cap (Original)",
         "Original Currency",
         "Market Cap (EUR)",
+        "EUR Rate",
         "Market Cap (USD)",
+        "USD Rate",
         "Exchange",
         "Active",
         "Description",

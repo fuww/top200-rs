@@ -7,6 +7,17 @@ use anyhow::Result;
 use sqlx::sqlite::SqlitePool;
 use std::collections::HashMap;
 
+/// Result of a currency conversion including the rate used
+#[derive(Debug, Clone)]
+pub struct ConversionResult {
+    /// The converted amount
+    pub amount: f64,
+    /// The effective rate used for conversion (from_currency -> to_currency)
+    pub rate: f64,
+    /// How the rate was determined: "direct", "reverse", "cross", "same", or "not_found"
+    pub rate_source: &'static str,
+}
+
 /// Insert a currency into the database
 pub async fn insert_currency(pool: &SqlitePool, code: &str, name: &str) -> Result<()> {
     sqlx::query(
@@ -94,51 +105,70 @@ pub async fn get_rate_map_from_db_for_date(
 }
 
 /// Convert an amount from one currency to another using the rate map
+/// Returns only the converted amount (for backwards compatibility)
 pub fn convert_currency(
     amount: f64,
     from_currency: &str,
     to_currency: &str,
     rate_map: &HashMap<String, f64>,
 ) -> f64 {
+    convert_currency_with_rate(amount, from_currency, to_currency, rate_map).amount
+}
+
+/// Convert an amount from one currency to another, returning the result with rate information
+pub fn convert_currency_with_rate(
+    amount: f64,
+    from_currency: &str,
+    to_currency: &str,
+    rate_map: &HashMap<String, f64>,
+) -> ConversionResult {
     if from_currency == to_currency {
-        return amount;
+        return ConversionResult {
+            amount,
+            rate: 1.0,
+            rate_source: "same",
+        };
     }
 
     // Handle special cases for currency subunits and alternative codes
-    let (adjusted_amount, adjusted_from_currency) = match from_currency {
-        "GBp" => (amount / 100.0, "GBP"), // Convert pence to pounds
-        "ZAc" => (amount / 100.0, "ZAR"),
-        "ILA" => (amount, "ILS"),
-        _ => (amount, from_currency),
+    let (adjusted_amount, adjusted_from_currency, subunit_divisor) = match from_currency {
+        "GBp" => (amount / 100.0, "GBP", 100.0), // Convert pence to pounds
+        "ZAc" => (amount / 100.0, "ZAR", 100.0),
+        "ILA" => (amount, "ILS", 1.0),
+        _ => (amount, from_currency, 1.0),
     };
 
     // Adjust target currency if needed
-    let adjusted_to_currency = match to_currency {
-        "GBp" => "GBP", // Also handle GBp as target currency
-        "ZAc" => "ZAR", // Also handle ZAc as target currency
-        "ILA" => "ILS",
-        _ => to_currency,
+    let (adjusted_to_currency, target_multiplier) = match to_currency {
+        "GBp" => ("GBP", 100.0), // Also handle GBp as target currency
+        "ZAc" => ("ZAR", 100.0), // Also handle ZAc as target currency
+        "ILA" => ("ILS", 1.0),
+        _ => (to_currency, 1.0),
     };
 
     // Try direct conversion first
     let direct_rate = format!("{}/{}", adjusted_from_currency, adjusted_to_currency);
     if let Some(&rate) = rate_map.get(&direct_rate) {
-        let result = adjusted_amount * rate;
-        return match to_currency {
-            "GBp" => result * 100.0,
-            "ZAc" => result * 100.0,
-            _ => result,
+        let result = adjusted_amount * rate * target_multiplier;
+        // Effective rate accounts for subunit conversions
+        let effective_rate = rate * target_multiplier / subunit_divisor;
+        return ConversionResult {
+            amount: result,
+            rate: effective_rate,
+            rate_source: "direct",
         };
     }
 
     // Try reverse rate
     let reverse_rate = format!("{}/{}", adjusted_to_currency, adjusted_from_currency);
     if let Some(&rate) = rate_map.get(&reverse_rate) {
-        let result = adjusted_amount * (1.0 / rate);
-        return match to_currency {
-            "GBp" => result * 100.0,
-            "ZAc" => result * 100.0,
-            _ => result,
+        let inverse_rate = 1.0 / rate;
+        let result = adjusted_amount * inverse_rate * target_multiplier;
+        let effective_rate = inverse_rate * target_multiplier / subunit_divisor;
+        return ConversionResult {
+            amount: result,
+            rate: effective_rate,
+            rate_source: "reverse",
         };
     }
 
@@ -148,11 +178,13 @@ pub fn convert_currency(
             if from1 == adjusted_from_currency {
                 let second_leg = format!("{}/{}", to1, adjusted_to_currency);
                 if let Some(&rate2) = rate_map.get(&second_leg) {
-                    let result = adjusted_amount * rate1 * rate2;
-                    return match to_currency {
-                        "GBp" => result * 100.0,
-                        "ZAc" => result * 100.0,
-                        _ => result,
+                    let combined_rate = rate1 * rate2;
+                    let result = adjusted_amount * combined_rate * target_multiplier;
+                    let effective_rate = combined_rate * target_multiplier / subunit_divisor;
+                    return ConversionResult {
+                        amount: result,
+                        rate: effective_rate,
+                        rate_source: "cross",
                     };
                 }
             }
@@ -165,7 +197,11 @@ pub fn convert_currency(
         "⚠️  Warning: No exchange rate found for {}/{}, returning unconverted amount",
         from_currency, to_currency
     );
-    amount
+    ConversionResult {
+        amount,
+        rate: 1.0,
+        rate_source: "not_found",
+    }
 }
 
 /// Insert a forex rate into the database
@@ -549,6 +585,62 @@ mod tests {
         assert_eq!(currencies.len(), 2);
         assert!(currencies.iter().any(|(c, _)| c == "XYZ"));
         assert!(currencies.iter().any(|(c, _)| c == "ABC"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_convert_currency_with_rate() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert currencies and rates
+        insert_currency(&pool, "EUR", "Euro").await?;
+        insert_currency(&pool, "USD", "US Dollar").await?;
+        insert_currency(&pool, "JPY", "Japanese Yen").await?;
+        insert_currency(&pool, "GBP", "British Pound").await?;
+
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956301).await?;
+        insert_forex_rate(&pool, "USD/JPY", 150.0, 150.0, 1701956301).await?;
+        insert_forex_rate(&pool, "GBP/USD", 1.25, 1.25, 1701956301).await?;
+
+        let rate_map = get_rate_map_from_db(&pool).await?;
+
+        // Test same currency - rate should be 1.0
+        let result = convert_currency_with_rate(100.0, "USD", "USD", &rate_map);
+        assert_eq!(result.amount, 100.0);
+        assert_eq!(result.rate, 1.0);
+        assert_eq!(result.rate_source, "same");
+
+        // Test direct rate EUR->USD
+        let result = convert_currency_with_rate(100.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(result.amount, 108.0, epsilon = 0.01);
+        assert_relative_eq!(result.rate, 1.08, epsilon = 0.0001);
+        assert_eq!(result.rate_source, "direct");
+
+        // Test reverse rate USD->EUR
+        let result = convert_currency_with_rate(100.0, "USD", "EUR", &rate_map);
+        assert_relative_eq!(result.amount, 100.0 / 1.08, epsilon = 0.01);
+        assert_relative_eq!(result.rate, 1.0 / 1.08, epsilon = 0.0001);
+        // Could be "direct" or "reverse" depending on rate_map construction
+        assert!(result.rate_source == "direct" || result.rate_source == "reverse");
+
+        // Test cross rate EUR->JPY (via USD)
+        let result = convert_currency_with_rate(100.0, "EUR", "JPY", &rate_map);
+        let expected_amount = 100.0 * 1.08 * 150.0;
+        let expected_rate = 1.08 * 150.0;
+        assert_relative_eq!(result.amount, expected_amount, epsilon = 0.01);
+        // Rate should be the combined rate (could be direct if cross-rate was precomputed)
+        assert!(
+            (result.rate - expected_rate).abs() < 0.01 || (result.rate - 1.08).abs() < 0.01 // If EUR/JPY is precomputed
+        );
+
+        // Test GBp (pence) to USD - subunit handling
+        let result = convert_currency_with_rate(10000.0, "GBp", "USD", &rate_map);
+        // 10000 pence = 100 GBP, 100 GBP * 1.25 = 125 USD
+        assert_relative_eq!(result.amount, 125.0, epsilon = 0.01);
+        // Effective rate: 1.25 / 100 = 0.0125 (pence to USD)
+        assert_relative_eq!(result.rate, 0.0125, epsilon = 0.0001);
 
         Ok(())
     }

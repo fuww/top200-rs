@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT\n            m.ticker as \"ticker!\",\n            m.name as \"name!\",\n            CAST(m.market_cap_original AS REAL) as market_cap_original,\n            m.original_currency,\n            CAST(m.market_cap_eur AS REAL) as market_cap_eur,\n            CAST(m.market_cap_usd AS REAL) as market_cap_usd,\n            m.exchange,\n            m.active,\n            CAST(m.price AS REAL) as price,\n            td.description,\n            td.homepage_url,\n            td.employees,\n            td.ceo\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = ?\n        ORDER BY m.market_cap_eur DESC\n        ",
+  "query": "\n        SELECT\n            m.ticker as \"ticker!\",\n            m.name as \"name!\",\n            CAST(m.market_cap_original AS REAL) as market_cap_original,\n            m.original_currency,\n            CAST(m.market_cap_eur AS REAL) as market_cap_eur,\n            CAST(m.market_cap_usd AS REAL) as market_cap_usd,\n            CAST(m.eur_rate AS REAL) as eur_rate,\n            CAST(m.usd_rate AS REAL) as usd_rate,\n            m.exchange,\n            m.active,\n            CAST(m.price AS REAL) as price,\n            td.description,\n            td.homepage_url,\n            td.employees,\n            td.ceo\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = ?\n        ORDER BY m.market_cap_eur DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -34,38 +34,48 @@
         "type_info": "Float"
       },
       {
-        "name": "exchange",
+        "name": "eur_rate",
         "ordinal": 6,
+        "type_info": "Float"
+      },
+      {
+        "name": "usd_rate",
+        "ordinal": 7,
+        "type_info": "Float"
+      },
+      {
+        "name": "exchange",
+        "ordinal": 8,
         "type_info": "Text"
       },
       {
         "name": "active",
-        "ordinal": 7,
+        "ordinal": 9,
         "type_info": "Bool"
       },
       {
         "name": "price",
-        "ordinal": 8,
+        "ordinal": 10,
         "type_info": "Float"
       },
       {
         "name": "description",
-        "ordinal": 9,
+        "ordinal": 11,
         "type_info": "Text"
       },
       {
         "name": "homepage_url",
-        "ordinal": 10,
+        "ordinal": 12,
         "type_info": "Text"
       },
       {
         "name": "employees",
-        "ordinal": 11,
+        "ordinal": 13,
         "type_info": "Integer"
       },
       {
         "name": "ceo",
-        "ordinal": 12,
+        "ordinal": 14,
         "type_info": "Text"
       }
     ],
@@ -85,8 +95,10 @@
       true,
       true,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "e79f7deaba775f858c506078da6642f3d85d45d483a515030cdc1d944d2b6ddd"
+  "hash": "cc45a6e1df95c43a77eb9aa14e974f9b9e1ea0783f76cd6530cd6be4d45dbbde"
 }

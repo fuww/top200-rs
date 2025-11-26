@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT \n            m.ticker as \"ticker!\",\n            m.name as \"name!\",\n            CAST(m.market_cap_original AS REAL) as market_cap_original,\n            m.original_currency,\n            CAST(m.market_cap_eur AS REAL) as market_cap_eur,\n            CAST(m.market_cap_usd AS REAL) as market_cap_usd,\n            m.exchange,\n            m.active,\n            strftime('%s', m.timestamp) as timestamp,\n            td.description,\n            td.homepage_url,\n            td.employees,\n            td.ceo\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)\n        ",
+  "query": "\n        SELECT\n            m.ticker as \"ticker!\",\n            m.name as \"name!\",\n            CAST(m.market_cap_original AS REAL) as market_cap_original,\n            m.original_currency,\n            CAST(m.market_cap_eur AS REAL) as market_cap_eur,\n            CAST(m.market_cap_usd AS REAL) as market_cap_usd,\n            CAST(m.eur_rate AS REAL) as eur_rate,\n            CAST(m.usd_rate AS REAL) as usd_rate,\n            m.exchange,\n            m.active,\n            strftime('%s', m.timestamp) as timestamp,\n            td.description,\n            td.homepage_url,\n            td.employees,\n            td.ceo\n        FROM market_caps m\n        LEFT JOIN ticker_details td ON m.ticker = td.ticker\n        WHERE m.timestamp = (SELECT MAX(timestamp) FROM market_caps)\n        ",
   "describe": {
     "columns": [
       {
@@ -34,38 +34,48 @@
         "type_info": "Float"
       },
       {
-        "name": "exchange",
+        "name": "eur_rate",
         "ordinal": 6,
-        "type_info": "Text"
+        "type_info": "Float"
       },
       {
-        "name": "active",
+        "name": "usd_rate",
         "ordinal": 7,
-        "type_info": "Bool"
+        "type_info": "Float"
       },
       {
-        "name": "timestamp",
+        "name": "exchange",
         "ordinal": 8,
         "type_info": "Text"
       },
       {
-        "name": "description",
+        "name": "active",
         "ordinal": 9,
-        "type_info": "Text"
+        "type_info": "Bool"
       },
       {
-        "name": "homepage_url",
+        "name": "timestamp",
         "ordinal": 10,
         "type_info": "Text"
       },
       {
-        "name": "employees",
+        "name": "description",
         "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "homepage_url",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "employees",
+        "ordinal": 13,
         "type_info": "Integer"
       },
       {
         "name": "ceo",
-        "ordinal": 12,
+        "ordinal": 14,
         "type_info": "Text"
       }
     ],
@@ -85,8 +95,10 @@
       true,
       true,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "2d7c638c493b05b3a2634b7720345a13b22faee8e61493ef96170619438f4f93"
+  "hash": "b90735ab80b8f102e332f0ed2d4131cab06f90a05876bd94fde83757335f3c61"
 }

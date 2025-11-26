@@ -4,7 +4,7 @@
 
 use crate::api;
 use crate::config;
-use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
+use crate::currencies::{convert_currency_with_rate, get_rate_map_from_db_for_date};
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use sqlx::sqlite::SqlitePool;
@@ -52,15 +52,15 @@ pub async fn fetch_monthly_historical_marketcaps(
                     .await
                 {
                     Ok(market_cap) => {
-                        // Convert currencies if needed
-                        let market_cap_eur = convert_currency(
+                        // Convert currencies with rate information
+                        let eur_result = convert_currency_with_rate(
                             market_cap.market_cap_original,
                             &market_cap.original_currency,
                             "EUR",
                             &rate_map,
                         );
 
-                        let market_cap_usd = convert_currency(
+                        let usd_result = convert_currency_with_rate(
                             market_cap.market_cap_original,
                             &market_cap.original_currency,
                             "USD",
@@ -75,17 +75,19 @@ pub async fn fetch_monthly_historical_marketcaps(
                             r#"
                             INSERT OR REPLACE INTO market_caps (
                                 ticker, name, market_cap_original, original_currency,
-                                market_cap_eur, market_cap_usd, exchange, price,
-                                active, timestamp
+                                market_cap_eur, market_cap_usd, eur_rate, usd_rate,
+                                exchange, price, active, timestamp
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             "#,
                             ticker,
                             market_cap.name,
                             market_cap.market_cap_original,
                             market_cap.original_currency,
-                            market_cap_eur,
-                            market_cap_usd,
+                            eur_result.amount,
+                            usd_result.amount,
+                            eur_result.rate,
+                            usd_result.rate,
                             market_cap.exchange,
                             market_cap.price,
                             true,
