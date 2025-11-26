@@ -4,7 +4,7 @@
 use crate::api::FMPClient;
 use crate::currencies::insert_forex_rate;
 use anyhow::Result;
-use chrono::Local;
+use chrono::Utc;
 use sqlx::sqlite::SqlitePool;
 
 /// Update exchange rates in the database
@@ -21,8 +21,8 @@ pub async fn update_exchange_rates(fmp_client: &FMPClient, pool: &SqlitePool) ->
         }
     };
 
-    // Store rates in database
-    let timestamp = Local::now().timestamp();
+    // Store rates in database (use UTC timestamp for consistency)
+    let timestamp = Utc::now().timestamp();
     for rate in exchange_rates {
         if let (Some(name), Some(price)) = (rate.name, rate.price) {
             insert_forex_rate(pool, &name, price, price, timestamp).await?;

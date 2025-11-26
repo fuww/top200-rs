@@ -113,6 +113,16 @@ fn parse_percentage(s: &Option<String>) -> Option<f64> {
     s.as_ref()?.parse::<f64>().ok()
 }
 
+/// Safely truncate a string to a maximum number of characters, respecting UTF-8 boundaries
+fn truncate_string(s: &str, max_chars: usize) -> String {
+    if s.chars().count() <= max_chars {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_chars.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
 /// Parse USD amount string to f64
 fn parse_usd_amount(s: &Option<String>) -> Option<f64> {
     s.as_ref()?.parse::<f64>().ok()
@@ -197,11 +207,7 @@ fn create_gainers_losers_chart(
         )))?;
 
         // Add label
-        let label_name = if name.len() > 30 {
-            format!("{}...", &name[..27])
-        } else {
-            name.clone()
-        };
+        let label_name = truncate_string(name, 30);
 
         root.draw_text(
             &label_name,
@@ -221,7 +227,12 @@ fn create_gainers_losers_chart(
     for (i, (name, pct)) in losers.iter().enumerate() {
         let y = 9 - i;
         let y_coord = y as i32;
-        let color = RGBColor(244 - (i * 5) as u8, 63 + (i * 5) as u8, 94 + (i * 5) as u8);
+        // Use saturating arithmetic to prevent u8 underflow
+        let color = RGBColor(
+            244u8.saturating_sub((i * 5) as u8),
+            63u8.saturating_add((i * 5) as u8),
+            94u8.saturating_add((i * 5) as u8),
+        );
 
         chart.draw_series(std::iter::once(Rectangle::new(
             [(0.0, y), (*pct, y.saturating_sub(1))],
@@ -229,11 +240,7 @@ fn create_gainers_losers_chart(
         )))?;
 
         // Add label
-        let label_name = if name.len() > 30 {
-            format!("{}...", &name[..27])
-        } else {
-            name.clone()
-        };
+        let label_name = truncate_string(name, 30);
 
         root.draw_text(
             &label_name,
@@ -352,11 +359,7 @@ fn create_market_distribution_chart(
         ))?;
 
         // Company name
-        let display_name = if name.len() > 25 {
-            format!("{}...", &name[..22])
-        } else {
-            name.clone()
-        };
+        let display_name = truncate_string(name, 25);
 
         root.draw_text(
             &format!("{} ({})", display_name, ticker),
@@ -530,11 +533,7 @@ fn create_rank_movement_chart(
         ))?;
 
         // Company name
-        let display_name = if name.len() > 25 {
-            format!("{}...", &name[..22])
-        } else {
-            name.clone()
-        };
+        let display_name = truncate_string(name, 25);
 
         root.draw_text(
             &display_name,
@@ -573,11 +572,7 @@ fn create_rank_movement_chart(
         ))?;
 
         // Company name
-        let display_name = if name.len() > 25 {
-            format!("{}...", &name[..22])
-        } else {
-            name.clone()
-        };
+        let display_name = truncate_string(name, 25);
 
         root.draw_text(
             &display_name,
@@ -807,12 +802,16 @@ fn create_summary_dashboard(
         (850, 420),
     )?;
 
-    // Calculate average change
-    let avg_change: f64 = records
-        .iter()
-        .filter_map(|r| parse_percentage(&r.percentage_change))
-        .sum::<f64>()
-        / records.len() as f64;
+    // Calculate average change (avoid division by zero)
+    let avg_change: f64 = if records.is_empty() {
+        0.0
+    } else {
+        records
+            .iter()
+            .filter_map(|r| parse_percentage(&r.percentage_change))
+            .sum::<f64>()
+            / records.len() as f64
+    };
 
     root.draw_text(
         &format!("Average Change: {:.2}%", avg_change),
@@ -836,11 +835,7 @@ fn create_summary_dashboard(
     });
 
     if let Some(gainer) = biggest_gainer {
-        let name = if gainer.name.len() > 20 {
-            format!("{}...", &gainer.name[..17])
-        } else {
-            gainer.name.clone()
-        };
+        let name = truncate_string(&gainer.name, 20);
         root.draw_text(
             &format!("Top Gainer: {}", name),
             &TextStyle::from(("sans-serif", 14).into_font()),
@@ -857,11 +852,7 @@ fn create_summary_dashboard(
     }
 
     if let Some(loser) = biggest_loser {
-        let name = if loser.name.len() > 20 {
-            format!("{}...", &loser.name[..17])
-        } else {
-            loser.name.clone()
-        };
+        let name = truncate_string(&loser.name, 20);
         root.draw_text(
             &format!("Top Loser: {}", name),
             &TextStyle::from(("sans-serif", 14).into_font()),

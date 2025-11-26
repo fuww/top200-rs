@@ -225,31 +225,6 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
         all_tickers.insert(ticker.clone());
     }
 
-    // Debug: Print sample values for first few tickers to verify data quality
-    let mut debug_count = 0;
-    eprintln!("\n=== DEBUG: Sample Market Cap Values ===");
-    for ticker in all_tickers.iter().take(3) {
-        if let (Some(from_rec), Some(to_rec)) = (from_map.get(ticker), to_map.get(ticker)) {
-            if let (Some(from_val), Some(to_val)) = (from_rec.market_cap_usd, to_rec.market_cap_usd)
-            {
-                eprintln!("Ticker: {}", ticker);
-                eprintln!(
-                    "  From: ${:.0} (${:.2}B)",
-                    from_val,
-                    from_val / 1_000_000_000.0
-                );
-                eprintln!("  To:   ${:.0} (${:.2}B)", to_val, to_val / 1_000_000_000.0);
-                let pct = ((to_val - from_val) / from_val) * 100.0;
-                eprintln!("  Change: {:.2}%\n", pct);
-                debug_count += 1;
-                if debug_count >= 3 {
-                    break;
-                }
-            }
-        }
-    }
-    eprintln!("=======================================\n");
-
     for ticker in all_tickers {
         let from_record = from_map.get(&ticker);
         let to_record = to_map.get(&ticker);
@@ -486,18 +461,9 @@ fn export_summary_report(
             .unwrap()
     });
 
-    eprintln!("=== DEBUG: Top 3 Gainers ===");
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         let pct = comp.percentage_change.unwrap();
         let abs_change = comp.absolute_change.unwrap_or(0.0);
-
-        if i < 3 {
-            eprintln!("{}. {} ({}):", i + 1, comp.name, comp.ticker);
-            eprintln!("   From: ${:.0}", comp.market_cap_from.unwrap_or(0.0));
-            eprintln!("   To:   ${:.0}", comp.market_cap_to.unwrap_or(0.0));
-            eprintln!("   Abs change: ${:.0}", abs_change);
-            eprintln!("   Pct change: {:.2}%\n", pct);
-        }
 
         writeln!(
             file,
@@ -510,7 +476,6 @@ fn export_summary_report(
             abs_change / 1_000_000.0
         )?;
     }
-    eprintln!("============================\n");
     writeln!(file)?;
 
     // Top 10 losers

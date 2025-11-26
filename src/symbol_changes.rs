@@ -154,6 +154,18 @@ pub async fn check_ticker_updates(
     })
 }
 
+/// Validate that a ticker symbol is safe to use in config file replacement
+/// Prevents potential config file corruption from malformed symbols
+fn is_valid_ticker_symbol(symbol: &str) -> bool {
+    // Ticker symbols should only contain alphanumeric chars, dots, and hyphens
+    // and should be reasonably short (max 20 chars)
+    !symbol.is_empty()
+        && symbol.len() <= 20
+        && symbol
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+}
+
 /// Apply ticker updates to the configuration file
 pub async fn apply_ticker_updates(
     pool: &SqlitePool,
@@ -164,6 +176,22 @@ pub async fn apply_ticker_updates(
     if changes_to_apply.is_empty() {
         println!("No changes to apply.");
         return Ok(());
+    }
+
+    // Validate all symbols before making any changes
+    for change in &changes_to_apply {
+        if !is_valid_ticker_symbol(&change.old_symbol) {
+            anyhow::bail!(
+                "Invalid old symbol '{}': must be alphanumeric with dots/hyphens, max 20 chars",
+                change.old_symbol
+            );
+        }
+        if !is_valid_ticker_symbol(&change.new_symbol) {
+            anyhow::bail!(
+                "Invalid new symbol '{}': must be alphanumeric with dots/hyphens, max 20 chars",
+                change.new_symbol
+            );
+        }
     }
 
     // Read current config
