@@ -43,38 +43,51 @@ if [ "${WORKFLOW_TYPE}" = "daily" ]; then
   </body></html>"
 else
   # Multi-period analysis workflow
+  # Build download URLs for artifacts
+  NIGHTLY_LINK_URL="https://nightly.link/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/${ARTIFACT_NAME}.zip"
+  ARTIFACTS_PAGE_URL="${GITHUB_RUN_URL}#artifacts"
+
   HTML_CONTENT="<html><body>
     <h2>Market Caps Multi-Period Analysis Complete</h2>
     <p>The daily market caps analysis for Top200-RS has finished successfully.</p>
-    
+
     <h3>Analysis Periods:</h3>
     <ul>
       <li><strong>Current Date:</strong> ${TODAY_DATE}</li>
       <li><strong>7 Days Ago:</strong> ${WEEK_AGO_DATE}</li>
       <li><strong>Same Day Last Month:</strong> ${MONTH_AGO_DATE}</li>
     </ul>
-    
+
     <h3>Comparisons Generated:</h3>
     <ul>
       <li>Week-over-week comparison (${WEEK_AGO_DATE} to ${TODAY_DATE})</li>
       <li>Month-over-month comparison (${MONTH_AGO_DATE} to ${TODAY_DATE})</li>
     </ul>
-    
+
     <h3>Generated Outputs:</h3>
     <ul>
       <li>Market cap CSV files for all three dates</li>
       <li>Comparison CSV and summary reports</li>
       <li>Visualization charts (SVG format)</li>
     </ul>
-    
+
+    <h3 style=\"color: #0366d6;\">Download Files:</h3>
+    <p style=\"margin-bottom: 10px;\">
+      <a href=\"${NIGHTLY_LINK_URL}\" style=\"display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;\">Download All Files (ZIP)</a>
+    </p>
+    <p style=\"font-size: 0.9em; color: #666;\">
+      Direct download link - no GitHub login required.<br/>
+      Alternative: <a href=\"${ARTIFACTS_PAGE_URL}\">View on GitHub Artifacts</a>
+    </p>
+
     <h3>Run Details:</h3>
     <ul>
       <li>Run Number: #${GITHUB_RUN_NUMBER}</li>
       <li>Commit: ${GITHUB_SHA}</li>
       <li>Workflow URL: <a href=\"${GITHUB_RUN_URL}\">View Workflow Run</a></li>
     </ul>
-    
-    <p>All generated files are available as artifacts in the workflow run and will be retained for 90 days.</p>
+
+    <p>All generated files will be retained for 90 days.</p>
   </body></html>"
 fi
 
