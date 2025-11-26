@@ -61,21 +61,37 @@ impl FMPClient {
             // Wait for rate limit permit
             let _permit = self.rate_limiter.acquire().await.unwrap();
 
-            let response = self
-                .client
-                .get(&url)
-                .send()
-                .await
-                .context("Failed to send request")?;
+            // Helper to schedule permit release after 200ms (ensures permits are always released)
+            let schedule_permit_release = || {
+                let rate_limiter = self.rate_limiter.clone();
+                tokio::spawn(async move {
+                    sleep(Duration::from_millis(200)).await;
+                    rate_limiter.add_permits(1);
+                });
+            };
+
+            let response = match self.client.get(&url).send().await {
+                Ok(resp) => resp,
+                Err(e) => {
+                    schedule_permit_release();
+                    return Err(anyhow::anyhow!("Failed to send request: {}", e));
+                }
+            };
 
             // Get the response text first to log in case of error
-            let text = response
-                .text()
-                .await
-                .context("Failed to get response text")?;
+            let text = match response.text().await {
+                Ok(t) => t,
+                Err(e) => {
+                    schedule_permit_release();
+                    return Err(anyhow::anyhow!("Failed to get response text: {}", e));
+                }
+            };
 
             // Check for rate limit error
             if text.contains("Limit Reach") {
+                // Release permit before retry
+                schedule_permit_release();
+
                 if retries >= max_retries {
                     return Err(anyhow::anyhow!(
                         "Rate limit reached after {} retries",
@@ -95,15 +111,11 @@ impl FMPClient {
 
             match serde_json::from_str::<T>(&text) {
                 Ok(result) => {
-                    // Schedule permit release after 200ms
-                    let rate_limiter = self.rate_limiter.clone();
-                    tokio::spawn(async move {
-                        sleep(Duration::from_millis(200)).await;
-                        rate_limiter.add_permits(1);
-                    });
+                    schedule_permit_release();
                     return Ok(result);
                 }
                 Err(e) => {
+                    schedule_permit_release();
                     eprintln!("Failed to parse response for URL {}: {}", url, e);
                     eprintln!("Response text: {}", text);
                     return Err(anyhow::anyhow!("Failed to parse response: {}", e));

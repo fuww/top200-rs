@@ -64,9 +64,11 @@ pub async fn get_rate_map_from_db_for_date(
         };
 
         if let Some((ask, _bid, _timestamp)) = rate_result {
-            let (from, to) = symbol.split_once('/').unwrap();
-            rate_map.insert(format!("{}/{}", from, to), ask);
-            rate_map.insert(format!("{}/{}", to, from), 1.0 / ask);
+            // Skip symbols that don't have the expected format (e.g., "EUR/USD")
+            if let Some((from, to)) = symbol.split_once('/') {
+                rate_map.insert(format!("{}/{}", from, to), ask);
+                rate_map.insert(format!("{}/{}", to, from), 1.0 / ask);
+            }
         }
     }
 
@@ -157,7 +159,12 @@ pub fn convert_currency(
         }
     }
 
-    // If no conversion rate is found, return the original amount
+    // If no conversion rate is found, log a warning and return the original amount
+    // This is a fallback to prevent crashes, but the data will be inaccurate
+    eprintln!(
+        "⚠️  Warning: No exchange rate found for {}/{}, returning unconverted amount",
+        from_currency, to_currency
+    );
     amount
 }
 

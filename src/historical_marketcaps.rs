@@ -61,10 +61,10 @@ pub async fn fetch_historical_marketcaps(
                     // Store the Unix timestamp of the historical date
                     let timestamp = naive_dt.and_utc().timestamp();
 
-                    // Insert into database
+                    // Insert into database (use OR REPLACE to handle re-runs gracefully)
                     sqlx::query!(
                         r#"
-                        INSERT INTO market_caps (
+                        INSERT OR REPLACE INTO market_caps (
                             ticker, name, market_cap_original, original_currency,
                             market_cap_eur, market_cap_usd, exchange, price,
                             active, timestamp

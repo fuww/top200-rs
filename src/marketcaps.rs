@@ -8,7 +8,7 @@ use crate::exchange_rates;
 use crate::models;
 use crate::ticker_details::{self, TickerDetails};
 use anyhow::Result;
-use chrono::Local;
+use chrono::{Local, Utc};
 use csv::Writer;
 use indicatif::{ProgressBar, ProgressStyle};
 use sqlx::sqlite::SqlitePool;
@@ -147,8 +147,8 @@ async fn update_market_caps(pool: &SqlitePool) -> Result<()> {
     let rate_map = Arc::new(rate_map);
     let total_tickers = tickers.len();
 
-    // Use a single timestamp for all records
-    let timestamp = Local::now().naive_utc().and_utc().timestamp();
+    // Use a single UTC timestamp for all records (consistent with other modules)
+    let timestamp = Utc::now().timestamp();
 
     // Process tickers with progress tracking
     let progress = ProgressBar::new(total_tickers as u64);
