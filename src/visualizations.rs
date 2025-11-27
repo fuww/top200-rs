@@ -937,3 +937,228 @@ pub async fn generate_all_charts(from_date: &str, to_date: &str) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for parse_percentage
+    #[test]
+    fn test_parse_percentage_valid_positive() {
+        let result = parse_percentage(&Some("15.5".to_string()));
+        assert_eq!(result, Some(15.5));
+    }
+
+    #[test]
+    fn test_parse_percentage_valid_negative() {
+        let result = parse_percentage(&Some("-25.75".to_string()));
+        assert_eq!(result, Some(-25.75));
+    }
+
+    #[test]
+    fn test_parse_percentage_zero() {
+        let result = parse_percentage(&Some("0".to_string()));
+        assert_eq!(result, Some(0.0));
+    }
+
+    #[test]
+    fn test_parse_percentage_none() {
+        let result = parse_percentage(&None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_percentage_invalid_string() {
+        let result = parse_percentage(&Some("not a number".to_string()));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_percentage_empty_string() {
+        let result = parse_percentage(&Some("".to_string()));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_percentage_very_large() {
+        let result = parse_percentage(&Some("999999.99".to_string()));
+        assert_eq!(result, Some(999999.99));
+    }
+
+    #[test]
+    fn test_parse_percentage_scientific_notation() {
+        let result = parse_percentage(&Some("1.5e2".to_string()));
+        assert_eq!(result, Some(150.0));
+    }
+
+    // Tests for parse_usd_amount
+    #[test]
+    fn test_parse_usd_amount_valid() {
+        let result = parse_usd_amount(&Some("1000000000".to_string()));
+        assert_eq!(result, Some(1000000000.0));
+    }
+
+    #[test]
+    fn test_parse_usd_amount_decimal() {
+        let result = parse_usd_amount(&Some("1234567890.50".to_string()));
+        assert_eq!(result, Some(1234567890.50));
+    }
+
+    #[test]
+    fn test_parse_usd_amount_none() {
+        let result = parse_usd_amount(&None);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_usd_amount_invalid() {
+        let result = parse_usd_amount(&Some("N/A".to_string()));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_parse_usd_amount_trillion() {
+        let result = parse_usd_amount(&Some("3500000000000".to_string()));
+        assert_eq!(result, Some(3_500_000_000_000.0));
+    }
+
+    // Tests for truncate_string
+    #[test]
+    fn test_truncate_string_short() {
+        let result = truncate_string("Short", 20);
+        assert_eq!(result, "Short");
+    }
+
+    #[test]
+    fn test_truncate_string_exact_length() {
+        let result = truncate_string("Exact", 5);
+        assert_eq!(result, "Exact");
+    }
+
+    #[test]
+    fn test_truncate_string_needs_truncation() {
+        let result = truncate_string("This is a very long company name that needs truncation", 20);
+        assert_eq!(result.len(), 20);
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_string_unicode() {
+        // Unicode characters: should handle correctly
+        let result = truncate_string("日本語テスト文字列", 5);
+        assert_eq!(result, "日本...");
+    }
+
+    #[test]
+    fn test_truncate_string_empty() {
+        let result = truncate_string("", 10);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_truncate_string_max_chars_zero() {
+        // Edge case: max_chars less than 3 (ellipsis length)
+        let result = truncate_string("Test", 2);
+        // Should truncate with ... even if it makes it longer
+        assert!(result.ends_with("...") || result.len() <= 2);
+    }
+
+    #[test]
+    fn test_truncate_string_preserves_emoji() {
+        let result = truncate_string("Nike 👟 Inc.", 20);
+        assert_eq!(result, "Nike 👟 Inc.");
+    }
+
+    // Tests for ComparisonRecord struct
+    #[test]
+    fn test_comparison_record_deserialization() {
+        let csv_data = r#"Ticker,Name,Market Cap From (USD),Market Cap To (USD),Absolute Change (USD),Percentage Change (%),Rank From,Rank To,Rank Change,Market Share From (%),Market Share To (%)
+AAPL,Apple Inc.,3000000000000,3500000000000,500000000000,16.67,1,1,0,15.5,16.0"#;
+
+        let mut reader = csv::Reader::from_reader(csv_data.as_bytes());
+        let record: ComparisonRecord = reader
+            .deserialize()
+            .next()
+            .expect("Should have at least one record")
+            .expect("Should deserialize correctly");
+
+        assert_eq!(record.ticker, "AAPL");
+        assert_eq!(record.name, "Apple Inc.");
+        assert_eq!(record.market_cap_from, Some("3000000000000".to_string()));
+        assert_eq!(record.market_cap_to, Some("3500000000000".to_string()));
+        assert_eq!(record.percentage_change, Some("16.67".to_string()));
+        assert_eq!(record.rank_from, Some("1".to_string()));
+        assert_eq!(record.rank_to, Some("1".to_string()));
+        assert_eq!(record.rank_change, Some("0".to_string()));
+    }
+
+    #[test]
+    fn test_comparison_record_with_missing_fields() {
+        let csv_data = r#"Ticker,Name,Market Cap From (USD),Market Cap To (USD),Absolute Change (USD),Percentage Change (%),Rank From,Rank To,Rank Change,Market Share From (%),Market Share To (%)
+NEWCO,New Company,,1000000000,,,,100,NA,,"#;
+
+        let mut reader = csv::Reader::from_reader(csv_data.as_bytes());
+        let record: ComparisonRecord = reader
+            .deserialize()
+            .next()
+            .expect("Should have at least one record")
+            .expect("Should deserialize correctly");
+
+        assert_eq!(record.ticker, "NEWCO");
+        // Empty CSV fields deserialize as Some("") not None
+        assert!(record
+            .market_cap_from
+            .as_ref()
+            .map_or(true, |s| s.is_empty()));
+        assert_eq!(record.market_cap_to, Some("1000000000".to_string()));
+        assert!(record.rank_from.as_ref().map_or(true, |s| s.is_empty()));
+        assert_eq!(record.rank_to, Some("100".to_string()));
+    }
+
+    // Test color constants are defined correctly
+    #[test]
+    fn test_color_constants_defined() {
+        // Verify colors are defined with expected values
+        // Using pattern matching to verify structure
+        let RGBColor(r, g, b) = COLOR_EMERALD;
+        assert_eq!((r, g, b), (16, 185, 129));
+
+        let RGBColor(r, g, b) = COLOR_ROSE;
+        assert_eq!((r, g, b), (244, 63, 94));
+
+        let RGBColor(r, g, b) = COLOR_BLUE;
+        assert_eq!((r, g, b), (59, 130, 246));
+    }
+
+    #[test]
+    fn test_chart_colors_array_length() {
+        assert_eq!(CHART_COLORS.len(), 10);
+    }
+
+    // Test file pattern matching
+    #[test]
+    fn test_comparison_csv_pattern() {
+        let from_date = "2025-01-01";
+        let to_date = "2025-02-01";
+        let pattern = format!("comparison_{}_to_{}_", from_date, to_date);
+
+        assert_eq!(pattern, "comparison_2025-01-01_to_2025-02-01_");
+        assert!("comparison_2025-01-01_to_2025-02-01_20250201_120000.csv".starts_with(&pattern));
+    }
+
+    #[test]
+    fn test_truncate_company_names_for_chart() {
+        // Test typical company names that appear in charts
+        let names = vec![
+            ("LVMH Moet Hennessy Louis Vuitton SE", 25),
+            ("Apple Inc.", 25),
+            ("Microsoft Corporation", 25),
+            ("Alphabet Inc.", 25),
+        ];
+
+        for (name, max_len) in names {
+            let truncated = truncate_string(name, max_len);
+            assert!(truncated.chars().count() <= max_len || truncated.ends_with("..."));
+        }
+    }
+}

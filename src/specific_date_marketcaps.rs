@@ -251,3 +251,143 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for format_rate function
+    #[test]
+    fn test_format_rate_some_value() {
+        let result = format_rate(Some(1.234567));
+        assert_eq!(result, "1.234567");
+    }
+
+    #[test]
+    fn test_format_rate_six_decimal_places() {
+        let result = format_rate(Some(1.2345678901));
+        assert_eq!(result, "1.234568"); // Rounded to 6 decimals
+    }
+
+    #[test]
+    fn test_format_rate_none() {
+        let result = format_rate(None);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_format_rate_one() {
+        let result = format_rate(Some(1.0));
+        assert_eq!(result, "1.000000");
+    }
+
+    #[test]
+    fn test_format_rate_small_value() {
+        let result = format_rate(Some(0.000001));
+        assert_eq!(result, "0.000001");
+    }
+
+    #[test]
+    fn test_format_rate_large_value() {
+        let result = format_rate(Some(1234.567890));
+        assert_eq!(result, "1234.567890");
+    }
+
+    #[test]
+    fn test_format_rate_typical_eur_usd() {
+        // Typical EUR/USD rate around 1.08
+        let result = format_rate(Some(1.085432));
+        assert_eq!(result, "1.085432");
+    }
+
+    #[test]
+    fn test_format_rate_typical_jpy() {
+        // Typical JPY rate (need many decimal places for small values)
+        let result = format_rate(Some(0.006789));
+        assert_eq!(result, "0.006789");
+    }
+
+    // Tests for date parsing
+    #[test]
+    fn test_date_parsing_valid() {
+        let date_str = "2025-01-15";
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
+        assert!(date.is_ok());
+        let date = date.unwrap();
+        assert_eq!(date.year(), 2025);
+        assert_eq!(date.month(), 1);
+        assert_eq!(date.day(), 15);
+    }
+
+    #[test]
+    fn test_date_parsing_invalid_format() {
+        let date_str = "15-01-2025"; // Wrong format
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
+        assert!(date.is_err());
+    }
+
+    #[test]
+    fn test_date_parsing_invalid_date() {
+        let date_str = "2025-13-01"; // Invalid month
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
+        assert!(date.is_err());
+    }
+
+    #[test]
+    fn test_date_parsing_leap_year() {
+        let date_str = "2024-02-29"; // Leap year
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
+        assert!(date.is_ok());
+    }
+
+    #[test]
+    fn test_date_parsing_non_leap_year() {
+        let date_str = "2025-02-29"; // Not a leap year
+        let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d");
+        assert!(date.is_err());
+    }
+
+    // Tests for timestamp conversion
+    #[test]
+    fn test_timestamp_from_date() {
+        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
+        let timestamp = naive_dt.and_utc().timestamp();
+
+        // Jan 1, 2025 00:00:00 UTC should be a specific timestamp
+        assert!(timestamp > 1_700_000_000); // Sanity check - after 2023
+        assert!(timestamp < 2_000_000_000); // Sanity check - before 2033
+    }
+
+    #[test]
+    fn test_timestamp_ordering() {
+        let date1 = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let date2 = NaiveDate::from_ymd_opt(2025, 6, 15).unwrap();
+
+        let ts1 = NaiveDateTime::new(date1, NaiveTime::default())
+            .and_utc()
+            .timestamp();
+        let ts2 = NaiveDateTime::new(date2, NaiveTime::default())
+            .and_utc()
+            .timestamp();
+
+        assert!(ts1 < ts2);
+    }
+
+    // Test CSV output filename format
+    #[test]
+    fn test_csv_filename_format() {
+        let date = NaiveDate::from_ymd_opt(2025, 3, 15).unwrap();
+        let date_str = date.format("%Y-%m-%d").to_string();
+
+        assert_eq!(date_str, "2025-03-15");
+
+        // Verify the expected filename pattern
+        let filename = format!("output/marketcaps_{}_{}.csv", date_str, "20250315_120000");
+        assert!(filename.starts_with("output/marketcaps_2025-03-15_"));
+        assert!(filename.ends_with(".csv"));
+    }
+}
+
+// Additional helper for chrono
+use chrono::Datelike;

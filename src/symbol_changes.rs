@@ -318,3 +318,287 @@ pub fn print_symbol_change_report(report: &SymbolChangeReport) {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for is_valid_ticker_symbol function
+    #[test]
+    fn test_valid_us_ticker() {
+        assert!(is_valid_ticker_symbol("AAPL"));
+        assert!(is_valid_ticker_symbol("MSFT"));
+        assert!(is_valid_ticker_symbol("NKE"));
+    }
+
+    #[test]
+    fn test_valid_ticker_with_dot() {
+        assert!(is_valid_ticker_symbol("BRK.A"));
+        assert!(is_valid_ticker_symbol("BRK.B"));
+        assert!(is_valid_ticker_symbol("MC.PA"));
+    }
+
+    #[test]
+    fn test_valid_ticker_with_hyphen() {
+        assert!(is_valid_ticker_symbol("HM-B.ST"));
+        assert!(is_valid_ticker_symbol("HM-A"));
+    }
+
+    #[test]
+    fn test_valid_ticker_with_numbers() {
+        assert!(is_valid_ticker_symbol("9983.T"));
+        assert!(is_valid_ticker_symbol("7974.T"));
+        assert!(is_valid_ticker_symbol("3382.T"));
+    }
+
+    #[test]
+    fn test_invalid_empty_ticker() {
+        assert!(!is_valid_ticker_symbol(""));
+    }
+
+    #[test]
+    fn test_invalid_ticker_too_long() {
+        assert!(!is_valid_ticker_symbol("ABCDEFGHIJKLMNOPQRSTUVWXYZ")); // > 20 chars
+    }
+
+    #[test]
+    fn test_invalid_ticker_with_space() {
+        assert!(!is_valid_ticker_symbol("AA PL"));
+    }
+
+    #[test]
+    fn test_invalid_ticker_with_special_chars() {
+        assert!(!is_valid_ticker_symbol("AAPL!"));
+        assert!(!is_valid_ticker_symbol("AAPL@"));
+        assert!(!is_valid_ticker_symbol("AAPL#"));
+        assert!(!is_valid_ticker_symbol("AAPL$"));
+        assert!(!is_valid_ticker_symbol("AAPL%"));
+    }
+
+    #[test]
+    fn test_invalid_ticker_with_unicode() {
+        assert!(!is_valid_ticker_symbol("AAPL日本"));
+        assert!(!is_valid_ticker_symbol("日本語"));
+    }
+
+    #[test]
+    fn test_valid_ticker_max_length() {
+        // Exactly 20 characters should be valid
+        assert!(is_valid_ticker_symbol("ABCDEFGHIJ1234567890"));
+    }
+
+    #[test]
+    fn test_valid_ticker_boundary() {
+        // 21 characters should be invalid
+        assert!(!is_valid_ticker_symbol("ABCDEFGHIJ12345678901"));
+    }
+
+    // Tests for StoredSymbolChange struct
+    #[test]
+    fn test_stored_symbol_change_creation() {
+        let change = StoredSymbolChange {
+            id: Some(1),
+            old_symbol: "FB".to_string(),
+            new_symbol: "META".to_string(),
+            change_date: Some("2021-10-28".to_string()),
+            company_name: Some("Meta Platforms Inc.".to_string()),
+            reason: Some("Company rebranding".to_string()),
+            applied: 0,
+        };
+
+        assert_eq!(change.old_symbol, "FB");
+        assert_eq!(change.new_symbol, "META");
+        assert_eq!(change.applied, 0);
+    }
+
+    #[test]
+    fn test_stored_symbol_change_clone() {
+        let change = StoredSymbolChange {
+            id: Some(1),
+            old_symbol: "OLD".to_string(),
+            new_symbol: "NEW".to_string(),
+            change_date: None,
+            company_name: None,
+            reason: None,
+            applied: 0,
+        };
+
+        let cloned = change.clone();
+        assert_eq!(change.old_symbol, cloned.old_symbol);
+        assert_eq!(change.new_symbol, cloned.new_symbol);
+    }
+
+    // Tests for SymbolChangeReport struct
+    #[test]
+    fn test_symbol_change_report_empty() {
+        let report = SymbolChangeReport {
+            pending_changes: vec![],
+            applicable_changes: vec![],
+            non_applicable_changes: vec![],
+            conflicts: vec![],
+        };
+
+        assert!(report.pending_changes.is_empty());
+        assert!(report.applicable_changes.is_empty());
+        assert!(report.non_applicable_changes.is_empty());
+        assert!(report.conflicts.is_empty());
+    }
+
+    #[test]
+    fn test_symbol_change_report_with_changes() {
+        let change = StoredSymbolChange {
+            id: Some(1),
+            old_symbol: "OLD".to_string(),
+            new_symbol: "NEW".to_string(),
+            change_date: None,
+            company_name: None,
+            reason: None,
+            applied: 0,
+        };
+
+        let report = SymbolChangeReport {
+            pending_changes: vec![change.clone()],
+            applicable_changes: vec![change.clone()],
+            non_applicable_changes: vec![],
+            conflicts: vec![],
+        };
+
+        assert_eq!(report.pending_changes.len(), 1);
+        assert_eq!(report.applicable_changes.len(), 1);
+    }
+
+    #[test]
+    fn test_symbol_change_report_with_conflicts() {
+        let report = SymbolChangeReport {
+            pending_changes: vec![],
+            applicable_changes: vec![],
+            non_applicable_changes: vec![],
+            conflicts: vec![
+                "Both OLD and NEW exist in config".to_string(),
+                "Another conflict".to_string(),
+            ],
+        };
+
+        assert_eq!(report.conflicts.len(), 2);
+    }
+
+    // Tests for config replacement pattern
+    #[test]
+    fn test_old_pattern_generation() {
+        let old_symbol = "AAPL";
+        let old_pattern = format!("\"{}\"", old_symbol);
+        assert_eq!(old_pattern, "\"AAPL\"");
+    }
+
+    #[test]
+    fn test_new_replacement_generation() {
+        let new_symbol = "NEW";
+        let old_symbol = "OLD";
+        let change_date = "2025-01-15";
+
+        let new_replacement = format!(
+            "\"{}\" # Changed from {} on {}",
+            new_symbol, old_symbol, change_date
+        );
+
+        assert_eq!(new_replacement, "\"NEW\" # Changed from OLD on 2025-01-15");
+        assert!(new_replacement.contains("Changed from"));
+    }
+
+    // Tests for HashSet operations (used in check_ticker_updates)
+    #[test]
+    fn test_ticker_hashset_operations() {
+        let mut tickers = HashSet::new();
+        tickers.insert("AAPL".to_string());
+        tickers.insert("MSFT".to_string());
+        tickers.insert("NKE".to_string());
+
+        assert!(tickers.contains(&"AAPL".to_string()));
+        assert!(!tickers.contains(&"GOOGL".to_string()));
+        assert_eq!(tickers.len(), 3);
+    }
+
+    #[test]
+    fn test_conflict_detection_logic() {
+        let mut current_tickers = HashSet::new();
+        current_tickers.insert("OLD".to_string());
+        current_tickers.insert("NEW".to_string()); // Both exist - conflict!
+
+        let old_symbol = "OLD".to_string();
+        let new_symbol = "NEW".to_string();
+
+        // Conflict: both old and new symbols exist
+        let is_conflict =
+            current_tickers.contains(&old_symbol) && current_tickers.contains(&new_symbol);
+        assert!(is_conflict);
+    }
+
+    #[test]
+    fn test_applicable_change_logic() {
+        let mut current_tickers = HashSet::new();
+        current_tickers.insert("OLD".to_string());
+        // NEW does not exist
+
+        let old_symbol = "OLD".to_string();
+        let new_symbol = "NEW".to_string();
+
+        // Applicable: old exists, new doesn't
+        let is_applicable =
+            current_tickers.contains(&old_symbol) && !current_tickers.contains(&new_symbol);
+        assert!(is_applicable);
+    }
+
+    #[test]
+    fn test_non_applicable_change_logic() {
+        let mut current_tickers = HashSet::new();
+        current_tickers.insert("AAPL".to_string());
+        // Neither OLD nor NEW exist in our config
+
+        let old_symbol = "OLD".to_string();
+
+        // Non-applicable: old symbol not in our config
+        let is_non_applicable = !current_tickers.contains(&old_symbol);
+        assert!(is_non_applicable);
+    }
+
+    // Test serialization of StoredSymbolChange
+    #[test]
+    fn test_stored_symbol_change_serialization() {
+        let change = StoredSymbolChange {
+            id: Some(1),
+            old_symbol: "FB".to_string(),
+            new_symbol: "META".to_string(),
+            change_date: Some("2021-10-28".to_string()),
+            company_name: Some("Meta Platforms".to_string()),
+            reason: None,
+            applied: 0,
+        };
+
+        let json = serde_json::to_string(&change).expect("Should serialize");
+        assert!(json.contains("FB"));
+        assert!(json.contains("META"));
+    }
+
+    #[test]
+    fn test_stored_symbol_change_deserialization() {
+        let json = r#"{
+            "id": 1,
+            "old_symbol": "FB",
+            "new_symbol": "META",
+            "change_date": "2021-10-28",
+            "company_name": "Meta Platforms",
+            "reason": null,
+            "applied": 0
+        }"#;
+
+        let change: StoredSymbolChange = serde_json::from_str(json).expect("Should deserialize");
+
+        assert_eq!(change.old_symbol, "FB");
+        assert_eq!(change.new_symbol, "META");
+        assert_eq!(change.applied, 0);
+    }
+}
+
+// Required for serialization tests
+#[cfg(test)]
+use serde_json;
