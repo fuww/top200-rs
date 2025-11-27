@@ -389,7 +389,7 @@ fn export_summary_report(
     writeln!(file)?;
 
     // Filter out comparisons with valid percentage changes
-    let valid_comparisons: Vec<_> = comparisons
+    let mut valid_comparisons: Vec<_> = comparisons
         .iter()
         .filter(|c| c.percentage_change.is_some())
         .collect();
@@ -441,7 +441,7 @@ fn export_summary_report(
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+    for (i, comp) in losers.iter().take(10).enumerate() {
         let currency = comp.original_currency.as_deref().unwrap_or("USD");
         writeln!(
             file,
