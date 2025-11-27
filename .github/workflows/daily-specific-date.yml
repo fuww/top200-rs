@@ -144,6 +144,38 @@ jobs:
             develop \
             --command bash -c "./target/release/top200-rs generate-charts --from ${{ steps.get-dates.outputs.month_ago }} --to ${{ steps.get-dates.outputs.today }}"
 
+      - name: Run peer group comparison (weekly)
+        run: |
+          echo "Running peer group comparison for week-over-week"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-peer-groups --from ${{ steps.get-dates.outputs.week_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: Run peer group comparison (monthly)
+        run: |
+          echo "Running peer group comparison for month-over-month"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-peer-groups --from ${{ steps.get-dates.outputs.month_ago }} --to ${{ steps.get-dates.outputs.today }}"
+
+      - name: Run benchmark comparison (weekly)
+        run: |
+          echo "Running benchmark comparison (S&P 500 proxy) for week-over-week"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-benchmark --from ${{ steps.get-dates.outputs.week_ago }} --to ${{ steps.get-dates.outputs.today }} --benchmark sp500"
+
+      - name: Run benchmark comparison (monthly)
+        run: |
+          echo "Running benchmark comparison (S&P 500 proxy) for month-over-month"
+          nix \
+            --extra-experimental-features "nix-command flakes" \
+            develop \
+            --command bash -c "./target/release/top200-rs compare-benchmark --from ${{ steps.get-dates.outputs.month_ago }} --to ${{ steps.get-dates.outputs.today }} --benchmark sp500"
+
       - name: List generated files
         run: |
           echo "Generated files in output directory:"
@@ -161,6 +193,14 @@ jobs:
             output/comparison_${{ steps.get-dates.outputs.week_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
             output/comparison_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.csv
             output/comparison_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
+            output/peer_groups_${{ steps.get-dates.outputs.week_ago }}_to_${{ steps.get-dates.outputs.today }}_*.csv
+            output/peer_groups_${{ steps.get-dates.outputs.week_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
+            output/peer_groups_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.csv
+            output/peer_groups_${{ steps.get-dates.outputs.month_ago }}_to_${{ steps.get-dates.outputs.today }}_*.md
+            output/benchmark_*_${{ steps.get-dates.outputs.week_ago }}_*.csv
+            output/benchmark_*_${{ steps.get-dates.outputs.week_ago }}_*.md
+            output/benchmark_*_${{ steps.get-dates.outputs.month_ago }}_*.csv
+            output/benchmark_*_${{ steps.get-dates.outputs.month_ago }}_*.md
             output/chart_*.svg
           retention-days: 90
 
