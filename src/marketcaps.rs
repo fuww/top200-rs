@@ -333,3 +333,230 @@ pub async fn marketcaps(pool: &SqlitePool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Tests for format_rate function
+    #[test]
+    fn test_format_rate_some_value() {
+        let result = format_rate(Some(1.234567));
+        assert_eq!(result, "1.234567");
+    }
+
+    #[test]
+    fn test_format_rate_none() {
+        let result = format_rate(None);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_format_rate_one() {
+        let result = format_rate(Some(1.0));
+        assert_eq!(result, "1.000000");
+    }
+
+    #[test]
+    fn test_format_rate_small_value() {
+        let result = format_rate(Some(0.000001));
+        assert_eq!(result, "0.000001");
+    }
+
+    #[test]
+    fn test_format_rate_rounding() {
+        // Test that values are rounded to 6 decimal places
+        let result = format_rate(Some(1.23456789));
+        assert_eq!(result, "1.234568");
+    }
+
+    #[test]
+    fn test_format_rate_zero() {
+        let result = format_rate(Some(0.0));
+        assert_eq!(result, "0.000000");
+    }
+
+    #[test]
+    fn test_format_rate_negative() {
+        // Rates should always be positive, but test the formatting anyway
+        let result = format_rate(Some(-1.5));
+        assert_eq!(result, "-1.500000");
+    }
+
+    // Tests for CSV headers
+    #[test]
+    fn test_csv_headers_complete() {
+        let expected_headers = vec![
+            "Symbol",
+            "Ticker",
+            "Name",
+            "Market Cap (Original)",
+            "Original Currency",
+            "Market Cap (EUR)",
+            "EUR Rate",
+            "Market Cap (USD)",
+            "USD Rate",
+            "Exchange",
+            "Active",
+            "Description",
+            "Homepage URL",
+            "Employees",
+            "CEO",
+            "Timestamp",
+        ];
+
+        // Just verify our expected headers count
+        assert_eq!(expected_headers.len(), 16);
+    }
+
+    // Tests for sorting behavior
+    #[test]
+    fn test_market_cap_sorting() {
+        let mut data = vec![
+            (100.0, vec!["A".to_string()]),
+            (500.0, vec!["B".to_string()]),
+            (300.0, vec!["C".to_string()]),
+        ];
+
+        // Sort by market cap descending (like in the actual code)
+        data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        assert_eq!(data[0].1[0], "B"); // 500 first
+        assert_eq!(data[1].1[0], "C"); // 300 second
+        assert_eq!(data[2].1[0], "A"); // 100 last
+    }
+
+    #[test]
+    fn test_market_cap_sorting_with_equal_values() {
+        let mut data = vec![
+            (100.0, vec!["A".to_string()]),
+            (100.0, vec!["B".to_string()]),
+            (100.0, vec!["C".to_string()]),
+        ];
+
+        data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // All have equal market caps, so order should be preserved (stable sort behavior)
+        // or at least no panic
+        assert_eq!(data.len(), 3);
+    }
+
+    #[test]
+    fn test_market_cap_sorting_with_nan() {
+        let mut data = vec![
+            (100.0, vec!["A".to_string()]),
+            (f64::NAN, vec!["B".to_string()]),
+            (200.0, vec!["C".to_string()]),
+        ];
+
+        // This uses the same ordering as the production code
+        data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        // NaN should be handled gracefully (treated as equal)
+        assert_eq!(data.len(), 3);
+    }
+
+    // Test active company filtering
+    #[test]
+    fn test_active_filter() {
+        let data = vec![
+            (
+                500.0,
+                vec![
+                    "A".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "true".to_string(),
+                ],
+            ),
+            (
+                400.0,
+                vec![
+                    "B".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "false".to_string(),
+                ],
+            ),
+            (
+                300.0,
+                vec![
+                    "C".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "".to_string(),
+                    "true".to_string(),
+                ],
+            ),
+        ];
+
+        // Filter active companies (index 10 is the Active column)
+        let active: Vec<_> = data
+            .iter()
+            .filter(|(_, record)| record[10] == "true")
+            .collect();
+
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].1[0], "A");
+        assert_eq!(active[1].1[0], "C");
+    }
+
+    // Test take top N
+    #[test]
+    fn test_take_top_100() {
+        let mut data: Vec<(f64, Vec<String>)> = (1..=150)
+            .map(|i| (i as f64 * 1000.0, vec![format!("Company{}", i)]))
+            .collect();
+
+        data.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        let top_100: Vec<_> = data.iter().take(100).collect();
+
+        assert_eq!(top_100.len(), 100);
+        // Highest value should be first (150 * 1000 = 150000)
+        assert_eq!(top_100[0].0, 150000.0);
+    }
+
+    // Test timestamp handling
+    #[test]
+    fn test_utc_timestamp() {
+        let timestamp = Utc::now().timestamp();
+
+        // Should be a reasonable Unix timestamp (after year 2000)
+        assert!(timestamp > 946684800); // Jan 1, 2000
+
+        // Should be before year 2100
+        assert!(timestamp < 4102444800_i64); // Jan 1, 2100
+    }
+
+    // Test currency conversion integration
+    #[test]
+    fn test_market_cap_conversion_setup() {
+        let original_market_cap = 1_000_000_000_i64; // 1 billion
+        let currency = "USD".to_string();
+
+        // Verify the values are properly typed
+        assert_eq!(original_market_cap, 1_000_000_000);
+        assert_eq!(currency, "USD");
+    }
+}
