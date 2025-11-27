@@ -336,6 +336,47 @@ impl FMPClient {
             .context("Failed to parse forex rates response")?;
         Ok(rates)
     }
+
+    /// Fetch historical exchange rates for a specific currency pair within a date range
+    pub async fn get_historical_exchange_rates(
+        &self,
+        pair: &str,
+        from_date: &str,
+        to_date: &str,
+    ) -> Result<HistoricalForexResponse> {
+        let url = format!(
+            "https://financialmodelingprep.com/api/v3/historical-price-full/{}?from={}&to={}&apikey={}",
+            pair, from_date, to_date, self.api_key
+        );
+
+        self.make_request(url).await
+    }
+
+    /// Get available forex currency pairs
+    pub async fn get_available_forex_pairs(&self) -> Result<Vec<String>> {
+        let url = format!(
+            "https://financialmodelingprep.com/api/v3/symbol/available-forex-currency-pairs?apikey={}",
+            self.api_key
+        );
+
+        #[derive(Debug, Deserialize)]
+        struct ForexPair {
+            symbol: String,
+            #[allow(dead_code)]
+            name: Option<String>,
+            #[allow(dead_code)]
+            currency: Option<String>,
+            #[serde(rename = "stockExchange")]
+            #[allow(dead_code)]
+            stock_exchange: Option<String>,
+            #[serde(rename = "exchangeShortName")]
+            #[allow(dead_code)]
+            exchange_short_name: Option<String>,
+        }
+
+        let pairs: Vec<ForexPair> = self.make_request(url).await?;
+        Ok(pairs.into_iter().map(|p| p.symbol).collect())
+    }
 }
 
 impl PolygonClient {
@@ -435,6 +476,32 @@ pub struct HistoricalMarketCap {
     pub original_currency: String,
     pub exchange: String,
     pub price: f64,
+}
+
+/// Response from historical forex price endpoint
+#[derive(Debug, Deserialize)]
+pub struct HistoricalForexResponse {
+    pub symbol: String,
+    pub historical: Vec<HistoricalForexData>,
+}
+
+/// Individual historical forex data point
+#[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
+pub struct HistoricalForexData {
+    pub date: String,
+    pub open: f64,
+    pub high: f64,
+    pub low: f64,
+    pub close: f64,
+    #[serde(rename = "adjClose")]
+    pub adj_close: Option<f64>,
+    pub volume: Option<f64>,
+    #[serde(rename = "unadjustedVolume")]
+    pub unadjusted_volume: Option<f64>,
+    pub change: Option<f64>,
+    #[serde(rename = "changePercent")]
+    pub change_percent: Option<f64>,
 }
 
 #[cfg(test)]

@@ -150,7 +150,16 @@ Edit the `config.toml` file to add new tickers to either the `us_tickers` or `no
 ### Updating Exchange Rates
 
 ```bash
+# Fetch current exchange rates
 cargo run -- ExportRates
+
+# Backfill historical exchange rates for a date range
+cargo run -- fetch-historical-exchange-rates --from 2024-01-01 --to 2024-12-31
+
+# This command will:
+# - Fetch daily exchange rates for common currency pairs (EUR, GBP, JPY, CHF, etc.)
+# - Store rates in the database with their respective dates
+# - Enable accurate historical market cap comparisons with correct FX rates
 ```
 
 ### Generating Combined Market Cap Reports
@@ -250,6 +259,33 @@ Symbol changes are fetched from the Financial Modeling Prep API and stored in th
 - Add comments showing the old ticker and change date
 - Mark changes as applied in the database to avoid reprocessing
 
+### Using the Justfile
+
+The project includes a `justfile` with common development tasks. If you have `just` installed:
+
+```bash
+# List all available commands
+just --list
+
+# Common tasks
+just build          # Build the project
+just test           # Run all tests
+just fmt            # Format all code
+just lint           # Run clippy linter
+just quality        # Run all quality checks (fmt, lint, deny)
+
+# Application commands
+just rates                      # Fetch current exchange rates
+just rates-historical 2024-01-01 2024-12-31  # Fetch historical rates
+just marketcaps                 # Fetch and export market caps
+just compare 2025-01-01 2025-02-01  # Compare two dates
+just ytd                        # Year-to-date comparison
+
+# Database commands
+just db             # Open SQLite shell
+just db-stats       # Show database statistics
+```
+
 ### Code Formatting
 
 After making code changes, always run the Rust formatter to ensure code style consistency:
@@ -282,13 +318,14 @@ The application supports these main commands:
 - `MarketCaps` (default) - Fetch and update market cap data
 - `ExportCombined` - Export combined market cap report to CSV
 - `ExportRates` - Export exchange rates to CSV
+- `fetch-historical-exchange-rates` - Backfill historical exchange rates for a date range
 - `FetchHistoricalMarketCaps` - Fetch historical yearly data
 - `FetchMonthlyHistoricalMarketCaps` - Fetch historical monthly data
 - `fetch-specific-date-market-caps` - Fetch market caps for a specific date
 - `compare-market-caps` - Compare market caps between two dates
 - `generate-charts` - Generate visualization charts from comparison data
 - `ListCurrencies` - List all available currencies
-- `Details` - Fetch company details
-- `ReadConfig` - Display configuration
+- `check-symbol-changes` - Check for ticker symbol changes
+- `apply-symbol-changes` - Apply pending symbol changes to config
 
 
