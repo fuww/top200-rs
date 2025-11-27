@@ -674,4 +674,216 @@ mod tests {
 
         assert_eq!(ceo_name, Some("Temporary CEO".to_string()));
     }
+
+    #[test]
+    fn test_symbol_change_deserialization() {
+        let json = serde_json::json!({
+            "oldSymbol": "FB",
+            "newSymbol": "META",
+            "date": "2022-06-09",
+            "name": "Meta Platforms Inc"
+        });
+
+        let change: SymbolChange = serde_json::from_value(json).unwrap();
+        assert_eq!(change.old_symbol, "FB");
+        assert_eq!(change.new_symbol, "META");
+        assert_eq!(change.date, Some("2022-06-09".to_string()));
+        assert_eq!(change.name, Some("Meta Platforms Inc".to_string()));
+    }
+
+    #[test]
+    fn test_symbol_change_with_missing_optional_fields() {
+        let json = serde_json::json!({
+            "oldSymbol": "TWTR",
+            "newSymbol": "X"
+        });
+
+        let change: SymbolChange = serde_json::from_value(json).unwrap();
+        assert_eq!(change.old_symbol, "TWTR");
+        assert_eq!(change.new_symbol, "X");
+        assert_eq!(change.date, None);
+        assert_eq!(change.name, None);
+    }
+
+    #[test]
+    fn test_symbol_change_list_deserialization() {
+        let json = serde_json::json!([
+            {
+                "oldSymbol": "FB",
+                "newSymbol": "META",
+                "date": "2022-06-09"
+            },
+            {
+                "oldSymbol": "TWTR",
+                "newSymbol": "X",
+                "date": "2023-07-24",
+                "name": "X Corp"
+            }
+        ]);
+
+        let changes: Vec<SymbolChange> = serde_json::from_value(json).unwrap();
+        assert_eq!(changes.len(), 2);
+        assert_eq!(changes[0].old_symbol, "FB");
+        assert_eq!(changes[1].old_symbol, "TWTR");
+    }
+
+    #[test]
+    fn test_exchange_rate_deserialization() {
+        let json = serde_json::json!({
+            "name": "EUR/USD",
+            "price": 1.08,
+            "changesPercentage": 0.5,
+            "change": 0.005,
+            "dayLow": 1.075,
+            "dayHigh": 1.085,
+            "yearHigh": 1.12,
+            "yearLow": 1.02,
+            "marketCap": null,
+            "priceAvg50": 1.07,
+            "priceAvg200": 1.06,
+            "volume": 1000000.0,
+            "avgVolume": 900000.0,
+            "exchange": "FOREX",
+            "open": 1.078,
+            "previousClose": 1.075,
+            "timestamp": 1701956301
+        });
+
+        let rate: ExchangeRate = serde_json::from_value(json).unwrap();
+        assert_eq!(rate.name, Some("EUR/USD".to_string()));
+        assert_eq!(rate.price, Some(1.08));
+        assert_eq!(rate.changes_percentage, Some(0.5));
+        assert_eq!(rate.timestamp, 1701956301);
+    }
+
+    #[test]
+    fn test_exchange_rate_with_minimal_fields() {
+        let json = serde_json::json!({
+            "timestamp": 1701956301
+        });
+
+        let rate: ExchangeRate = serde_json::from_value(json).unwrap();
+        assert_eq!(rate.name, None);
+        assert_eq!(rate.price, None);
+        assert_eq!(rate.timestamp, 1701956301);
+    }
+
+    #[test]
+    fn test_historical_forex_data_deserialization() {
+        let json = serde_json::json!({
+            "date": "2024-01-15",
+            "open": 1.0750,
+            "high": 1.0820,
+            "low": 1.0700,
+            "close": 1.0800,
+            "adjClose": 1.0800,
+            "volume": 500000.0,
+            "unadjustedVolume": 500000.0,
+            "change": 0.005,
+            "changePercent": 0.47
+        });
+
+        let data: HistoricalForexData = serde_json::from_value(json).unwrap();
+        assert_eq!(data.date, "2024-01-15");
+        assert_eq!(data.open, 1.0750);
+        assert_eq!(data.high, 1.0820);
+        assert_eq!(data.low, 1.0700);
+        assert_eq!(data.close, 1.0800);
+        assert_eq!(data.adj_close, Some(1.0800));
+    }
+
+    #[test]
+    fn test_historical_forex_data_with_minimal_fields() {
+        let json = serde_json::json!({
+            "date": "2024-01-15",
+            "open": 1.0750,
+            "high": 1.0820,
+            "low": 1.0700,
+            "close": 1.0800
+        });
+
+        let data: HistoricalForexData = serde_json::from_value(json).unwrap();
+        assert_eq!(data.date, "2024-01-15");
+        assert_eq!(data.close, 1.0800);
+        assert_eq!(data.adj_close, None);
+        assert_eq!(data.volume, None);
+    }
+
+    #[test]
+    fn test_historical_forex_response_deserialization() {
+        let json = serde_json::json!({
+            "symbol": "EURUSD",
+            "historical": [
+                {
+                    "date": "2024-01-15",
+                    "open": 1.0750,
+                    "high": 1.0820,
+                    "low": 1.0700,
+                    "close": 1.0800
+                },
+                {
+                    "date": "2024-01-14",
+                    "open": 1.0720,
+                    "high": 1.0780,
+                    "low": 1.0680,
+                    "close": 1.0750
+                }
+            ]
+        });
+
+        let response: HistoricalForexResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(response.symbol, "EURUSD");
+        assert_eq!(response.historical.len(), 2);
+        assert_eq!(response.historical[0].date, "2024-01-15");
+        assert_eq!(response.historical[1].date, "2024-01-14");
+    }
+
+    #[test]
+    fn test_historical_forex_response_empty_historical() {
+        let json = serde_json::json!({
+            "symbol": "XYZUSD",
+            "historical": []
+        });
+
+        let response: HistoricalForexResponse = serde_json::from_value(json).unwrap();
+        assert_eq!(response.symbol, "XYZUSD");
+        assert!(response.historical.is_empty());
+    }
+
+    #[test]
+    fn test_fmp_client_creation() {
+        let _client = FMPClient::new("test_api_key".to_string());
+        // Client should be created successfully
+        // We can't directly test the internal fields, but we can verify it doesn't panic
+        assert!(true);
+    }
+
+    #[test]
+    fn test_polygon_client_creation() {
+        let _client = PolygonClient::new("test_api_key".to_string());
+        // Client should be created successfully
+        assert!(true);
+    }
+
+    #[tokio::test]
+    async fn test_polygon_empty_ticker() {
+        let client = PolygonClient::new("test_key".to_string());
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let result = client.get_details("", date).await;
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("ticker empty"));
+    }
+
+    #[tokio::test]
+    async fn test_fmp_client_empty_ticker() {
+        let client = FMPClient::new("test_key".to_string());
+        let rate_map = HashMap::new();
+        let result = client.get_details("", &rate_map).await;
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("ticker empty"));
+    }
 }

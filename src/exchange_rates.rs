@@ -176,4 +176,102 @@ mod tests {
         assert_eq!(format_pair_with_slash("EUR/USD"), "EUR/USD");
         assert_eq!(format_pair_with_slash("JPYUSD"), "JPY/USD");
     }
+
+    #[test]
+    fn test_format_pair_with_slash_all_common_pairs() {
+        // Test all common forex pairs can be formatted correctly
+        for pair in COMMON_FOREX_PAIRS {
+            let formatted = format_pair_with_slash(pair);
+            assert!(
+                formatted.contains('/'),
+                "Pair {} should contain slash",
+                pair
+            );
+            let parts: Vec<&str> = formatted.split('/').collect();
+            assert_eq!(
+                parts.len(),
+                2,
+                "Pair {} should have exactly two parts",
+                pair
+            );
+            assert_eq!(
+                parts[0].len(),
+                3,
+                "First currency in {} should be 3 chars",
+                pair
+            );
+            assert_eq!(
+                parts[1].len(),
+                3,
+                "Second currency in {} should be 3 chars",
+                pair
+            );
+        }
+    }
+
+    #[test]
+    fn test_format_pair_with_slash_edge_cases() {
+        // Already has slash - should return as-is
+        assert_eq!(format_pair_with_slash("EUR/USD"), "EUR/USD");
+        assert_eq!(format_pair_with_slash("GBP/JPY"), "GBP/JPY");
+
+        // Short strings - should return as-is
+        assert_eq!(format_pair_with_slash("EUR"), "EUR");
+        assert_eq!(format_pair_with_slash(""), "");
+        assert_eq!(format_pair_with_slash("AB"), "AB");
+
+        // Long strings without slash - should return as-is
+        assert_eq!(format_pair_with_slash("EURUSDJPY"), "EURUSDJPY");
+
+        // Exactly 6 chars with slash already - should return as-is
+        assert_eq!(format_pair_with_slash("EU/USD"), "EU/USD");
+    }
+
+    #[test]
+    fn test_common_forex_pairs_not_empty() {
+        assert!(!COMMON_FOREX_PAIRS.is_empty());
+        assert!(
+            COMMON_FOREX_PAIRS.len() >= 10,
+            "Should have at least 10 common pairs"
+        );
+    }
+
+    #[test]
+    fn test_common_forex_pairs_all_end_with_usd() {
+        // All pairs should end with USD (base currency)
+        for pair in COMMON_FOREX_PAIRS {
+            assert!(pair.ends_with("USD"), "Pair {} should end with USD", pair);
+        }
+    }
+
+    #[test]
+    fn test_common_forex_pairs_format() {
+        // All pairs should be 6 characters (XXXUSD format)
+        for pair in COMMON_FOREX_PAIRS {
+            assert_eq!(pair.len(), 6, "Pair {} should be 6 characters", pair);
+        }
+    }
+
+    #[test]
+    fn test_common_forex_pairs_unique() {
+        // All pairs should be unique
+        let mut seen = std::collections::HashSet::new();
+        for pair in COMMON_FOREX_PAIRS {
+            assert!(seen.insert(pair), "Pair {} appears more than once", pair);
+        }
+    }
+
+    #[test]
+    fn test_common_forex_pairs_includes_major_currencies() {
+        // Major currencies should be included
+        let major_currencies = ["EUR", "GBP", "JPY", "CHF", "CAD"];
+        for currency in major_currencies {
+            let pair = format!("{}USD", currency);
+            assert!(
+                COMMON_FOREX_PAIRS.contains(&pair.as_str()),
+                "Major currency pair {} should be in COMMON_FOREX_PAIRS",
+                pair
+            );
+        }
+    }
 }

@@ -152,4 +152,102 @@ mod tests {
             NaiveDate::from_ymd_opt(2025, 12, 31).unwrap()
         );
     }
+
+    #[test]
+    fn test_get_last_day_of_month_all_months() {
+        // Test all 12 months for a non-leap year
+        let expected_days_2025 = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        for (month_idx, expected_day) in expected_days_2025.iter().enumerate() {
+            let month = (month_idx + 1) as u32;
+            let result = get_last_day_of_month(2025, month);
+            assert_eq!(
+                result.day(),
+                *expected_day,
+                "Month {} should end on day {}",
+                month,
+                expected_day
+            );
+        }
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_leap_years() {
+        // Test leap year detection for February
+        // Leap years: divisible by 4, except century years unless divisible by 400
+        assert_eq!(get_last_day_of_month(2000, 2).day(), 29); // Century leap year
+        assert_eq!(get_last_day_of_month(2004, 2).day(), 29); // Regular leap year
+        assert_eq!(get_last_day_of_month(2020, 2).day(), 29); // Recent leap year
+        assert_eq!(get_last_day_of_month(2024, 2).day(), 29); // Recent leap year
+
+        // Non-leap years
+        assert_eq!(get_last_day_of_month(1900, 2).day(), 28); // Century non-leap year
+        assert_eq!(get_last_day_of_month(2023, 2).day(), 28);
+        assert_eq!(get_last_day_of_month(2025, 2).day(), 28);
+        assert_eq!(get_last_day_of_month(2100, 2).day(), 28); // Future century non-leap
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_boundary_years() {
+        // Test edge case years
+        assert_eq!(
+            get_last_day_of_month(1970, 12),
+            NaiveDate::from_ymd_opt(1970, 12, 31).unwrap()
+        );
+        assert_eq!(
+            get_last_day_of_month(2000, 1),
+            NaiveDate::from_ymd_opt(2000, 1, 31).unwrap()
+        );
+        assert_eq!(
+            get_last_day_of_month(2099, 6),
+            NaiveDate::from_ymd_opt(2099, 6, 30).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_30_day_months() {
+        // April, June, September, November have 30 days
+        let thirty_day_months = [4, 6, 9, 11];
+        for &month in &thirty_day_months {
+            let result = get_last_day_of_month(2025, month);
+            assert_eq!(result.day(), 30, "Month {} should have 30 days", month);
+        }
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_31_day_months() {
+        // January, March, May, July, August, October, December have 31 days
+        let thirty_one_day_months = [1, 3, 5, 7, 8, 10, 12];
+        for &month in &thirty_one_day_months {
+            let result = get_last_day_of_month(2025, month);
+            assert_eq!(result.day(), 31, "Month {} should have 31 days", month);
+        }
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_returns_correct_year_and_month() {
+        // Verify that year and month are preserved correctly
+        let result = get_last_day_of_month(2023, 7);
+        assert_eq!(result.year(), 2023);
+        assert_eq!(result.month(), 7);
+        assert_eq!(result.day(), 31);
+
+        let result = get_last_day_of_month(2024, 2);
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.month(), 2);
+        assert_eq!(result.day(), 29);
+    }
+
+    #[test]
+    fn test_get_last_day_of_month_december_year_transition() {
+        // December is a special case since it involves next year calculation
+        let result = get_last_day_of_month(2024, 12);
+        assert_eq!(result.year(), 2024);
+        assert_eq!(result.month(), 12);
+        assert_eq!(result.day(), 31);
+
+        let result = get_last_day_of_month(2025, 12);
+        assert_eq!(result.year(), 2025);
+        assert_eq!(result.month(), 12);
+        assert_eq!(result.day(), 31);
+    }
 }

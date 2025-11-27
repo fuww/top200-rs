@@ -104,3 +104,92 @@ pub async fn fetch_historical_marketcaps(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Datelike, Timelike};
+
+    #[test]
+    fn test_year_range_iteration() {
+        // Test that year range iteration works correctly
+        let start_year = 2020;
+        let end_year = 2024;
+        let years: Vec<i32> = (start_year..=end_year).collect();
+
+        assert_eq!(years.len(), 5);
+        assert_eq!(years[0], 2020);
+        assert_eq!(years[4], 2024);
+    }
+
+    #[test]
+    fn test_december_31st_date_creation() {
+        // Test creating Dec 31st dates for various years
+        for year in 2020..=2025 {
+            let date = NaiveDate::from_ymd_opt(year, 12, 31).unwrap();
+            assert_eq!(date.year(), year);
+            assert_eq!(date.month(), 12);
+            assert_eq!(date.day(), 31);
+        }
+    }
+
+    #[test]
+    fn test_naive_datetime_creation() {
+        // Test creating NaiveDateTime for historical dates
+        let date = NaiveDate::from_ymd_opt(2023, 12, 31).unwrap();
+        let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
+
+        assert_eq!(naive_dt.year(), 2023);
+        assert_eq!(naive_dt.month(), 12);
+        assert_eq!(naive_dt.day(), 31);
+        assert_eq!(naive_dt.hour(), 0);
+        assert_eq!(naive_dt.minute(), 0);
+        assert_eq!(naive_dt.second(), 0);
+    }
+
+    #[test]
+    fn test_timestamp_conversion() {
+        // Test that timestamps are created correctly
+        let date = NaiveDate::from_ymd_opt(2023, 12, 31).unwrap();
+        let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
+        let timestamp = naive_dt.and_utc().timestamp();
+
+        // Dec 31, 2023 00:00:00 UTC should be around 1703980800
+        assert!(timestamp > 0);
+        assert!(timestamp > 1700000000); // After 2023-11-14
+        assert!(timestamp < 1710000000); // Before 2024-03-09
+    }
+
+    #[test]
+    fn test_year_range_boundaries() {
+        // Test edge cases for year ranges
+        let start_year = 2022;
+        let end_year = 2022; // Same year
+        let years: Vec<i32> = (start_year..=end_year).collect();
+
+        assert_eq!(years.len(), 1);
+        assert_eq!(years[0], 2022);
+    }
+
+    #[test]
+    fn test_empty_year_range() {
+        // Test invalid year range (start > end)
+        let start_year = 2025;
+        let end_year = 2020;
+        let years: Vec<i32> = (start_year..=end_year).collect();
+
+        assert!(years.is_empty());
+    }
+
+    #[test]
+    fn test_utc_datetime_conversion() {
+        // Test converting NaiveDateTime to UTC DateTime
+        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
+        let naive_dt = NaiveDateTime::new(date, NaiveTime::default());
+        let datetime_utc = naive_dt.and_utc();
+
+        assert_eq!(datetime_utc.year(), 2024);
+        assert_eq!(datetime_utc.month(), 6);
+        assert_eq!(datetime_utc.day(), 15);
+    }
+}

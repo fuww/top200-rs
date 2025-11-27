@@ -644,4 +644,218 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_conversion_result_struct() {
+        let result = ConversionResult {
+            amount: 100.0,
+            rate: 1.5,
+            rate_source: "direct",
+        };
+        assert_eq!(result.amount, 100.0);
+        assert_eq!(result.rate, 1.5);
+        assert_eq!(result.rate_source, "direct");
+    }
+
+    #[test]
+    fn test_convert_currency_same_currency() {
+        let rate_map = HashMap::new();
+        let result = convert_currency_with_rate(100.0, "USD", "USD", &rate_map);
+        assert_eq!(result.amount, 100.0);
+        assert_eq!(result.rate, 1.0);
+        assert_eq!(result.rate_source, "same");
+    }
+
+    #[test]
+    fn test_convert_currency_empty_rate_map() {
+        let rate_map = HashMap::new();
+        let result = convert_currency_with_rate(100.0, "EUR", "USD", &rate_map);
+        // When no rate is found, returns original amount with not_found source
+        assert_eq!(result.amount, 100.0);
+        assert_eq!(result.rate, 1.0);
+        assert_eq!(result.rate_source, "not_found");
+    }
+
+    #[test]
+    fn test_convert_currency_direct_rate() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+
+        let result = convert_currency_with_rate(100.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(result.amount, 110.0, epsilon = 0.01);
+        assert_relative_eq!(result.rate, 1.10, epsilon = 0.001);
+        assert_eq!(result.rate_source, "direct");
+    }
+
+    #[test]
+    fn test_convert_currency_reverse_rate() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("USD/EUR".to_string(), 0.91);
+
+        let result = convert_currency_with_rate(100.0, "EUR", "USD", &rate_map);
+        // Should use reverse rate: 1 / 0.91 ≈ 1.099
+        assert_relative_eq!(result.amount, 100.0 / 0.91, epsilon = 0.01);
+        assert_eq!(result.rate_source, "reverse");
+    }
+
+    #[test]
+    fn test_convert_currency_cross_rate() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+        rate_map.insert("USD/JPY".to_string(), 150.0);
+
+        let result = convert_currency_with_rate(100.0, "EUR", "JPY", &rate_map);
+        // EUR -> USD -> JPY: 100 * 1.10 * 150 = 16500
+        assert_relative_eq!(result.amount, 16500.0, epsilon = 1.0);
+        assert_eq!(result.rate_source, "cross");
+    }
+
+    #[test]
+    fn test_convert_currency_gbp_pence_to_usd() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("GBP/USD".to_string(), 1.25);
+
+        // 10000 pence = 100 GBP
+        let result = convert_currency_with_rate(10000.0, "GBp", "USD", &rate_map);
+        // 100 GBP * 1.25 = 125 USD
+        assert_relative_eq!(result.amount, 125.0, epsilon = 0.01);
+        // Effective rate: 1.25 / 100 = 0.0125 (pence to USD)
+        assert_relative_eq!(result.rate, 0.0125, epsilon = 0.0001);
+    }
+
+    #[test]
+    fn test_convert_currency_zar_cents_to_usd() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("ZAR/USD".to_string(), 0.055);
+
+        // 10000 cents = 100 ZAR
+        let result = convert_currency_with_rate(10000.0, "ZAc", "USD", &rate_map);
+        // 100 ZAR * 0.055 = 5.5 USD
+        assert_relative_eq!(result.amount, 5.5, epsilon = 0.01);
+        // Effective rate: 0.055 / 100 = 0.00055 (cents to USD)
+        assert_relative_eq!(result.rate, 0.00055, epsilon = 0.00001);
+    }
+
+    #[test]
+    fn test_convert_currency_ila_to_usd() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("ILS/USD".to_string(), 0.27);
+
+        // ILA is an alias for ILS
+        let result = convert_currency_with_rate(100.0, "ILA", "USD", &rate_map);
+        assert_relative_eq!(result.amount, 27.0, epsilon = 0.01);
+        assert_relative_eq!(result.rate, 0.27, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_convert_currency_to_gbp_pence() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("USD/GBP".to_string(), 0.80);
+
+        // 100 USD to GBp (pence)
+        let result = convert_currency_with_rate(100.0, "USD", "GBp", &rate_map);
+        // 100 USD * 0.80 = 80 GBP = 8000 pence
+        assert_relative_eq!(result.amount, 8000.0, epsilon = 1.0);
+        // Effective rate: 0.80 * 100 = 80 (USD to pence)
+        assert_relative_eq!(result.rate, 80.0, epsilon = 0.1);
+    }
+
+    #[test]
+    fn test_convert_currency_backwards_compatible() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+
+        // The simple convert_currency function should return just the amount
+        let amount = convert_currency(100.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(amount, 110.0, epsilon = 0.01);
+    }
+
+    #[test]
+    fn test_convert_currency_zero_amount() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+
+        let result = convert_currency_with_rate(0.0, "EUR", "USD", &rate_map);
+        assert_eq!(result.amount, 0.0);
+        assert_relative_eq!(result.rate, 1.10, epsilon = 0.001);
+    }
+
+    #[test]
+    fn test_convert_currency_large_amount() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+
+        // Test with a large market cap value (100 billion)
+        let result = convert_currency_with_rate(100_000_000_000.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(result.amount, 110_000_000_000.0, epsilon = 1000.0);
+    }
+
+    #[test]
+    fn test_convert_currency_negative_amount() {
+        let mut rate_map = HashMap::new();
+        rate_map.insert("EUR/USD".to_string(), 1.10);
+
+        // Negative amounts should still work (e.g., for debt calculations)
+        let result = convert_currency_with_rate(-100.0, "EUR", "USD", &rate_map);
+        assert_relative_eq!(result.amount, -110.0, epsilon = 0.01);
+    }
+
+    #[tokio::test]
+    async fn test_get_forex_rate_for_date() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        // Insert rates for different dates
+        insert_forex_rate(&pool, "EUR/USD", 1.05, 1.05, 1700000000).await?; // Earlier
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701000000).await?; // Middle
+        insert_forex_rate(&pool, "EUR/USD", 1.10, 1.10, 1702000000).await?; // Later
+
+        // Get rate for specific date (should get closest date before or equal)
+        let rate = get_forex_rate_for_date(&pool, "EUR/USD", 1701500000).await?;
+        assert!(rate.is_some());
+        let (ask, _, timestamp) = rate.unwrap();
+        assert_relative_eq!(ask, 1.08, epsilon = 0.001);
+        assert_eq!(timestamp, 1701000000);
+
+        // Get rate for exact date
+        let rate = get_forex_rate_for_date(&pool, "EUR/USD", 1702000000).await?;
+        assert!(rate.is_some());
+        let (ask, _, _) = rate.unwrap();
+        assert_relative_eq!(ask, 1.10, epsilon = 0.001);
+
+        // Get rate for date before any data
+        let rate = get_forex_rate_for_date(&pool, "EUR/USD", 1699000000).await?;
+        assert!(rate.is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_forex_symbols_empty() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        let symbols = list_forex_symbols(&pool).await?;
+        assert!(symbols.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_forex_symbols_with_data() -> Result<()> {
+        let pool = SqlitePool::connect("sqlite::memory:").await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+
+        insert_forex_rate(&pool, "EUR/USD", 1.08, 1.08, 1701956301).await?;
+        insert_forex_rate(&pool, "GBP/USD", 1.25, 1.25, 1701956301).await?;
+        insert_forex_rate(&pool, "JPY/USD", 0.0067, 0.0067, 1701956301).await?;
+
+        let symbols = list_forex_symbols(&pool).await?;
+        assert_eq!(symbols.len(), 3);
+        assert!(symbols.contains(&"EUR/USD".to_string()));
+        assert!(symbols.contains(&"GBP/USD".to_string()));
+        assert!(symbols.contains(&"JPY/USD".to_string()));
+
+        Ok(())
+    }
 }

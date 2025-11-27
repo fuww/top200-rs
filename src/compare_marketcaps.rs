@@ -389,7 +389,7 @@ fn export_summary_report(
     writeln!(file)?;
 
     // Filter out comparisons with valid percentage changes
-    let valid_comparisons: Vec<_> = comparisons
+    let mut valid_comparisons: Vec<_> = comparisons
         .iter()
         .filter(|c| c.percentage_change.is_some())
         .collect();
