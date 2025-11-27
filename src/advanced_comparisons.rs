@@ -351,6 +351,15 @@ pub fn get_available_dates() -> Result<Vec<String>> {
     let output_dir = Path::new("output");
     let mut dates = HashSet::new();
 
+    // Return empty list if output directory doesn't exist
+    if !output_dir.exists() {
+        println!("Output directory does not exist. No market cap data available.");
+        println!(
+            "Run 'cargo run -- fetch-specific-date-market-caps YYYY-MM-DD' to fetch data first."
+        );
+        return Ok(Vec::new());
+    }
+
     for entry in std::fs::read_dir(output_dir)? {
         let entry = entry?;
         let file_name = entry.file_name();
