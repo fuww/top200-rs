@@ -64,10 +64,31 @@ else
       <li>Month-over-month comparison (${MONTH_AGO_DATE} to ${TODAY_DATE})</li>
     </ul>
 
+    <h3 style=\"color: #8b5cf6;\">Peer Group Analysis:</h3>
+    <p style=\"font-size: 0.95em; color: #374151;\">Performance breakdown by industry segment:</p>
+    <ul>
+      <li><strong>Luxury</strong> - LVMH, Herm&egrave;s, Kering, Dior, Richemont, Moncler, Burberry, Prada</li>
+      <li><strong>Sportswear</strong> - Nike, Adidas, Puma, Lululemon, On Holding, Deckers, Skechers</li>
+      <li><strong>Fast Fashion</strong> - Inditex, H&amp;M, Fast Retailing, Gap, Abercrombie &amp; Fitch</li>
+      <li><strong>Value Retail</strong> - TJX Companies, Ross Stores, Burlington</li>
+      <li><strong>Footwear</strong> - Birkenstock, Crocs, Steve Madden, Ferragamo, Tod's</li>
+      <li><strong>E-commerce</strong> - Zalando, Vipshop, Revolve, ThredUp, Mytheresa</li>
+      <li><strong>Asian Fashion</strong> - Fast Retailing, Chow Tai Fook, Li Ning, Bosideng, Asics</li>
+    </ul>
+
+    <h3 style=\"color: #059669;\">Benchmark Comparison:</h3>
+    <p style=\"font-size: 0.95em; color: #374151;\">Performance vs S&amp;P 500 proxy (total market cap index):</p>
+    <ul>
+      <li>Identifies outperformers and underperformers relative to the market</li>
+      <li>Shows relative performance for each stock</li>
+    </ul>
+
     <h3>Generated Outputs:</h3>
     <ul>
       <li>Market cap CSV files for all three dates</li>
       <li>Comparison CSV and summary reports</li>
+      <li>Peer group analysis (CSV and Markdown summaries)</li>
+      <li>Benchmark comparison reports</li>
       <li>Visualization charts (SVG format)</li>
     </ul>
 
