@@ -465,21 +465,26 @@ fn export_summary_report(
     writeln!(file)?;
 
     // Filter out comparisons with valid percentage changes
-    let mut valid_comparisons: Vec<_> = comparisons
+    let valid_comparisons: Vec<_> = comparisons
         .iter()
         .filter(|c| c.percentage_change.is_some())
         .collect();
 
-    // Top 10 gainers
+    // Top 10 gainers (only positive changes)
     writeln!(file, "## Top 10 Gainers (by percentage)")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut gainers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.percentage_change.unwrap_or(0.0) > 0.0)
+        .cloned()
+        .collect();
+    gainers.sort_by(|a, b| {
         b.percentage_change
             .unwrap()
             .partial_cmp(&a.percentage_change.unwrap())
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+    for (i, comp) in gainers.iter().take(10).enumerate() {
         let pct = comp.percentage_change.unwrap();
         let abs_change = comp.absolute_change.unwrap_or(0.0);
 
@@ -496,16 +501,21 @@ fn export_summary_report(
     }
     writeln!(file)?;
 
-    // Top 10 losers
+    // Top 10 losers (only negative changes)
     writeln!(file, "## Top 10 Losers (by percentage)")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut losers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.percentage_change.unwrap_or(0.0) < 0.0)
+        .cloned()
+        .collect();
+    losers.sort_by(|a, b| {
         a.percentage_change
             .unwrap()
             .partial_cmp(&b.percentage_change.unwrap())
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+    for (i, comp) in losers.iter().take(10).enumerate() {
         writeln!(
             file,
             "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}% (${:.2}M decrease)",
@@ -514,21 +524,26 @@ fn export_summary_report(
             comp.ticker,
             comp.ticker,
             comp.percentage_change.unwrap(),
-            comp.absolute_change.unwrap_or(0.0) / 1_000_000.0
+            comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000.0
         )?;
     }
     writeln!(file)?;
 
-    // Top 10 by absolute gain
+    // Top 10 by absolute gain (only positive changes)
     writeln!(file, "## Top 10 by Absolute Gain")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut abs_gainers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.absolute_change.unwrap_or(0.0) > 0.0)
+        .cloned()
+        .collect();
+    abs_gainers.sort_by(|a, b| {
         b.absolute_change
             .unwrap_or(0.0)
             .partial_cmp(&a.absolute_change.unwrap_or(0.0))
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+    for (i, comp) in abs_gainers.iter().take(10).enumerate() {
         writeln!(
             file,
             "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B gain ({:.2}%)",
@@ -542,28 +557,31 @@ fn export_summary_report(
     }
     writeln!(file)?;
 
-    // Top 10 by absolute loss
+    // Top 10 by absolute loss (only negative changes)
     writeln!(file, "## Top 10 by Absolute Loss")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut abs_losers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.absolute_change.unwrap_or(0.0) < 0.0)
+        .cloned()
+        .collect();
+    abs_losers.sort_by(|a, b| {
         a.absolute_change
             .unwrap_or(0.0)
             .partial_cmp(&b.absolute_change.unwrap_or(0.0))
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
-        if comp.absolute_change.unwrap_or(0.0) < 0.0 {
-            writeln!(
-                file,
-                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B loss ({:.2}%)",
-                i + 1,
-                comp.name,
-                comp.ticker,
-                comp.ticker,
-                comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000_000.0,
-                comp.percentage_change.unwrap_or(0.0)
-            )?;
-        }
+    for (i, comp) in abs_losers.iter().take(10).enumerate() {
+        writeln!(
+            file,
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B loss ({:.2}%)",
+            i + 1,
+            comp.name,
+            comp.ticker,
+            comp.ticker,
+            comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000_000.0,
+            comp.percentage_change.unwrap_or(0.0)
+        )?;
     }
     writeln!(file)?;
 
