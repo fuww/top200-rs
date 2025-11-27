@@ -140,6 +140,7 @@ sqlite3 data.db < tests/market_caps_totals_per_year.sql
 - `ticker_details.rs`: Company details management
 - `utils.rs`: Common utilities and helpers
 - `visualizations.rs`: Generate beautiful SVG charts from comparison data
+- `advanced_comparisons.rs`: Multi-date trends, YoY/QoQ, rolling periods, benchmarks, peer groups
 
 ## Common Tasks
 
@@ -235,6 +236,117 @@ cargo run -- compare-market-caps --from 2025-07-01 --to 2025-08-01 && \
 cargo run -- generate-charts --from 2025-07-01 --to 2025-08-01
 ```
 
+### Advanced Comparison Features
+
+#### Multi-date Trend Analysis
+
+Compare more than 2 dates to analyze trends over time:
+
+```bash
+# Analyze trends across multiple dates
+cargo run -- trend-analysis --dates 2025-01-01,2025-04-01,2025-07-01,2025-10-01
+
+# This command will:
+# - Compare market caps across all specified dates
+# - Calculate CAGR (Compound Annual Growth Rate)
+# - Measure volatility and max drawdown
+# - Identify best/worst performers and most volatile stocks
+# Output files:
+# - trend_analysis_YYYY-MM-DD_to_YYYY-MM-DD_YYYYMMDD_HHMMSS.csv
+# - trend_analysis_YYYY-MM-DD_to_YYYY-MM-DD_summary_YYYYMMDD_HHMMSS.md
+```
+
+#### Year-over-Year (YoY) Comparison
+
+Automatic year-over-year analysis:
+
+```bash
+# Compare current date with same date in previous years
+cargo run -- compare-yoy --date 2025-06-15 --years 3
+
+# This will compare: 2022-06-15, 2023-06-15, 2024-06-15, 2025-06-15
+# Requires market cap data for all these dates
+```
+
+#### Quarter-over-Quarter (QoQ) Comparison
+
+Quarterly trend analysis:
+
+```bash
+# Compare quarterly data
+cargo run -- compare-qoq --date 2025-06-30 --quarters 4
+
+# This will compare quarter-end dates going back 4 quarters
+# Quarter-end dates: Mar 31, Jun 30, Sep 30, Dec 31
+```
+
+#### Rolling Period Comparisons
+
+Compare with rolling time windows:
+
+```bash
+# 30-day rolling comparison
+cargo run -- compare-rolling --date 2025-06-15 --period 30d
+
+# 90-day rolling comparison
+cargo run -- compare-rolling --date 2025-06-15 --period 90d
+
+# 1-year rolling comparison
+cargo run -- compare-rolling --date 2025-06-15 --period 1y
+
+# Custom period (e.g., 45 days)
+cargo run -- compare-rolling --date 2025-06-15 --period 45d
+```
+
+#### Benchmark Comparison
+
+Compare performance against market benchmarks:
+
+```bash
+# Compare against S&P 500 (uses total market cap as proxy)
+cargo run -- compare-benchmark --from 2025-01-01 --to 2025-06-15 --benchmark sp500
+
+# Compare against MSCI World
+cargo run -- compare-benchmark --from 2025-01-01 --to 2025-06-15 --benchmark msci
+
+# Output shows:
+# - Relative performance vs benchmark
+# - Outperformers and underperformers
+# - Detailed comparison with benchmark returns
+```
+
+#### Peer Group Comparison
+
+Compare predefined industry peer groups:
+
+```bash
+# Compare all peer groups
+cargo run -- compare-peer-groups --from 2025-01-01 --to 2025-06-15
+
+# Compare specific groups
+cargo run -- compare-peer-groups --from 2025-01-01 --to 2025-06-15 --groups luxury,sportswear
+
+# Available peer groups:
+# - Luxury (LVMH, Hermès, Kering, Dior, Richemont, etc.)
+# - Sportswear (Nike, Adidas, Puma, Lululemon, etc.)
+# - Fast Fashion (Inditex, H&M, Fast Retailing, Gap, etc.)
+# - Department Stores (Macy's, Nordstrom, Kohl's, etc.)
+# - Value Retail (TJX, Ross Stores, Burlington, etc.)
+# - Footwear (Nike, Birkenstock, Crocs, Deckers, etc.)
+# - E-commerce (Zalando, Vipshop, Revolve, etc.)
+# - Asian Fashion (Fast Retailing, Li Ning, Bosideng, etc.)
+```
+
+#### Utility Commands
+
+```bash
+# List available dates for comparison (from output/ directory)
+cargo run -- list-available-dates
+
+# List predefined peer groups with their tickers
+cargo run -- list-peer-groups
+```
+
 ### Tracking Stock Symbol Changes
 
 The application can track and apply stock ticker symbol changes (due to mergers, acquisitions, rebranding, etc.):
@@ -315,6 +427,7 @@ nix develop --command cargo deny check
 
 The application supports these main commands:
 
+### Data Fetching
 - `MarketCaps` (default) - Fetch and update market cap data
 - `ExportCombined` - Export combined market cap report to CSV
 - `ExportRates` - Export exchange rates to CSV
@@ -322,8 +435,22 @@ The application supports these main commands:
 - `FetchHistoricalMarketCaps` - Fetch historical yearly data
 - `FetchMonthlyHistoricalMarketCaps` - Fetch historical monthly data
 - `fetch-specific-date-market-caps` - Fetch market caps for a specific date
+
+### Basic Comparison
 - `compare-market-caps` - Compare market caps between two dates
 - `generate-charts` - Generate visualization charts from comparison data
+
+### Advanced Comparison
+- `trend-analysis` - Multi-date trend analysis (compare more than 2 dates)
+- `compare-yoy` - Year-over-Year comparison
+- `compare-qoq` - Quarter-over-Quarter comparison
+- `compare-rolling` - Rolling period comparison (30d, 90d, 1y, custom)
+- `compare-benchmark` - Compare against S&P 500, MSCI indices
+- `compare-peer-groups` - Compare predefined industry peer groups
+
+### Utilities
+- `list-available-dates` - List dates with available market cap data
+- `list-peer-groups` - List predefined peer groups with tickers
 - `ListCurrencies` - List all available currencies
 - `check-symbol-changes` - Check for ticker symbol changes
 - `apply-symbol-changes` - Apply pending symbol changes to config
