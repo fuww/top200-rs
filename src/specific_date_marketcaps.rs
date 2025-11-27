@@ -255,6 +255,7 @@ async fn export_specific_date_marketcaps(pool: &SqlitePool, date: NaiveDate) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Datelike;
 
     // Tests for format_rate function
     #[test]
@@ -388,6 +389,3 @@ mod tests {
         assert!(filename.ends_with(".csv"));
     }
 }
-
-// Additional helper for chrono
-use chrono::Datelike;

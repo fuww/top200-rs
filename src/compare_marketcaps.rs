@@ -389,21 +389,26 @@ fn export_summary_report(
     writeln!(file)?;
 
     // Filter out comparisons with valid percentage changes
-    let mut valid_comparisons: Vec<_> = comparisons
+    let valid_comparisons: Vec<_> = comparisons
         .iter()
         .filter(|c| c.percentage_change.is_some())
         .collect();
 
-    // Top 10 gainers
+    // Top 10 gainers (only positive changes)
     writeln!(file, "## Top 10 Gainers (by percentage)")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut gainers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.percentage_change.unwrap_or(0.0) > 0.0)
+        .cloned()
+        .collect();
+    gainers.sort_by(|a, b| {
         b.percentage_change
             .unwrap()
             .partial_cmp(&a.percentage_change.unwrap())
             .unwrap()
     });
 
-    for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+    for (i, comp) in gainers.iter().take(10).enumerate() {
         let pct = comp.percentage_change.unwrap();
         let abs_change = comp.absolute_change.unwrap_or(0.0);
         let currency = comp.original_currency.as_deref().unwrap_or("USD");
@@ -422,9 +427,14 @@ fn export_summary_report(
     }
     writeln!(file)?;
 
-    // Top 10 losers
+    // Top 10 losers (only negative changes)
     writeln!(file, "## Top 10 Losers (by percentage)")?;
-    valid_comparisons.sort_by(|a, b| {
+    let mut losers: Vec<_> = valid_comparisons
+        .iter()
+        .filter(|c| c.percentage_change.unwrap_or(0.0) < 0.0)
+        .cloned()
+        .collect();
+    losers.sort_by(|a, b| {
         a.percentage_change
             .unwrap()
             .partial_cmp(&b.percentage_change.unwrap())
@@ -477,7 +487,7 @@ fn export_summary_report(
     }
     writeln!(file)?;
 
-    // Top 10 by absolute loss
+    // Top 10 by absolute loss (only negative changes)
     writeln!(file, "## Top 10 by Absolute Loss")?;
     writeln!(
         file,
