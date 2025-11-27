@@ -3,17 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use anyhow::{Context, Result};
-use chrono::{Local, NaiveDate, NaiveDateTime, NaiveTime};
+use chrono::Local;
 use csv::{Reader, Writer};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
-use sqlx::sqlite::SqlitePool;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write as IoWrite;
 use std::path::Path;
-
-use crate::currencies::{convert_currency, get_rate_map_from_db_for_date};
 
 #[derive(Debug, Deserialize)]
 struct MarketCapRecord {
@@ -37,6 +34,7 @@ struct MarketCapRecord {
 struct MarketCapComparison {
     ticker: String,
     name: String,
+    original_currency: Option<String>,
     market_cap_from: Option<f64>,
     market_cap_to: Option<f64>,
     absolute_change: Option<f64>,
@@ -114,7 +112,7 @@ fn calculate_market_shares(records: &[MarketCapRecord]) -> HashMap<String, f64> 
 }
 
 /// Compare market caps between two dates
-pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &str) -> Result<()> {
+pub async fn compare_market_caps(from_date: &str, to_date: &str) -> Result<()> {
     println!("Comparing market caps from {} to {}", from_date, to_date);
 
     // Find CSV files for both dates
@@ -125,36 +123,7 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
     println!("  From: {}", from_file);
     println!("  To:   {}", to_file);
 
-    // Get exchange rates for the "to" date to normalize all values
-    let to_date_parsed = NaiveDate::parse_from_str(to_date, "%Y-%m-%d")?;
-    let to_date_timestamp = NaiveDateTime::new(to_date_parsed, NaiveTime::default())
-        .and_utc()
-        .timestamp();
-
-    println!(
-        "\n🔄 Normalizing currencies using {} exchange rates...",
-        to_date
-    );
-    let mut normalization_rates =
-        get_rate_map_from_db_for_date(pool, Some(to_date_timestamp)).await?;
-
-    // If no rates found for the specific date, fall back to latest available rates
-    if normalization_rates.is_empty() {
-        eprintln!(
-            "⚠️  No exchange rates found for {} - falling back to latest rates",
-            to_date
-        );
-        normalization_rates = get_rate_map_from_db_for_date(pool, None).await?;
-    }
-
-    if normalization_rates.is_empty() {
-        eprintln!("⚠️  WARNING: No exchange rates found at all!");
-        eprintln!("    Comparisons will include both market cap AND currency changes.");
-        eprintln!("    Run 'export-rates' to fetch exchange rates.");
-    } else {
-        println!("✅ Using exchange rates for currency normalization");
-        println!("   This eliminates FX noise and shows pure market cap changes");
-    }
+    println!("\n📊 Comparing market caps using original currency values...");
 
     // Read data from both files
     let progress = ProgressBar::new(4);
@@ -234,33 +203,14 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
             .or_else(|| to_record.map(|r| r.name.clone()))
             .unwrap_or_else(|| ticker.clone());
 
-        // NORMALIZE: Convert both dates using the SAME exchange rate (to_date's rate)
-        // This eliminates FX noise and shows pure market cap changes
-        let market_cap_from = from_record.and_then(|r| {
-            r.market_cap_original.map(|orig| {
-                let currency = r.original_currency.as_deref().unwrap_or("USD");
-                if normalization_rates.is_empty() {
-                    // Fallback: use unconverted USD value if no rates available
-                    r.market_cap_usd.unwrap_or(orig)
-                } else {
-                    // Normalize: convert original value using to_date's exchange rate
-                    convert_currency(orig, currency, "USD", &normalization_rates)
-                }
-            })
-        });
+        // Get original currency (should be the same for both dates for the same ticker)
+        let original_currency = from_record
+            .and_then(|r| r.original_currency.clone())
+            .or_else(|| to_record.and_then(|r| r.original_currency.clone()));
 
-        let market_cap_to = to_record.and_then(|r| {
-            r.market_cap_original.map(|orig| {
-                let currency = r.original_currency.as_deref().unwrap_or("USD");
-                if normalization_rates.is_empty() {
-                    // Fallback: use unconverted USD value if no rates available
-                    r.market_cap_usd.unwrap_or(orig)
-                } else {
-                    // Normalize: convert original value using to_date's exchange rate
-                    convert_currency(orig, currency, "USD", &normalization_rates)
-                }
-            })
-        });
+        // Use original currency values directly - no conversion
+        let market_cap_from = from_record.and_then(|r| r.market_cap_original);
+        let market_cap_to = to_record.and_then(|r| r.market_cap_original);
 
         let (absolute_change, percentage_change) = match (market_cap_from, market_cap_to) {
             (Some(from_val), Some(to_val)) => {
@@ -286,6 +236,7 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
         comparisons.push(MarketCapComparison {
             ticker: ticker.clone(),
             name,
+            original_currency,
             market_cap_from,
             market_cap_to,
             absolute_change,
@@ -305,30 +256,14 @@ pub async fn compare_market_caps(pool: &SqlitePool, from_date: &str, to_date: &s
         b_pct.partial_cmp(&a_pct).unwrap()
     });
 
-    // Collect unique currencies used in the data
-    let mut currencies_used: HashSet<String> = HashSet::new();
-    for record in from_records.iter().chain(to_records.iter()) {
-        if let Some(currency) = &record.original_currency {
-            if currency != "USD" {
-                currencies_used.insert(currency.clone());
-            }
-        }
-    }
-
     progress.inc(1);
     progress.finish_with_message("Analysis complete");
 
     // Export main comparison CSV
     export_comparison_csv(&comparisons, from_date, to_date)?;
 
-    // Export summary report with exchange rates information
-    export_summary_report(
-        &comparisons,
-        from_date,
-        to_date,
-        &normalization_rates,
-        &currencies_used,
-    )?;
+    // Export summary report
+    export_summary_report(&comparisons, from_date, to_date)?;
 
     Ok(())
 }
@@ -352,9 +287,10 @@ fn export_comparison_csv(
     writer.write_record(&[
         "Ticker",
         "Name",
-        "Market Cap From (USD)",
-        "Market Cap To (USD)",
-        "Absolute Change (USD)",
+        "Currency",
+        "Market Cap From",
+        "Market Cap To",
+        "Absolute Change",
         "Percentage Change (%)",
         "Rank From",
         "Rank To",
@@ -368,6 +304,9 @@ fn export_comparison_csv(
         writer.write_record(&[
             comp.ticker.clone(),
             comp.name.clone(),
+            comp.original_currency
+                .clone()
+                .unwrap_or_else(|| "USD".to_string()),
             comp.market_cap_from
                 .map(|v| format!("{:.2}", v))
                 .unwrap_or_else(|| "NA".to_string()),
@@ -415,8 +354,6 @@ fn export_summary_report(
     comparisons: &[MarketCapComparison],
     from_date: &str,
     to_date: &str,
-    rate_map: &HashMap<String, f64>,
-    currencies_used: &HashSet<String>,
 ) -> Result<()> {
     let timestamp = Local::now().format("%Y%m%d_%H%M%S");
     let filename = format!(
@@ -433,34 +370,21 @@ fn export_summary_report(
     )?;
     writeln!(file)?;
 
-    // Calculate overview statistics
-    let total_from: f64 = comparisons.iter().filter_map(|c| c.market_cap_from).sum();
-    let total_to: f64 = comparisons.iter().filter_map(|c| c.market_cap_to).sum();
-    let total_change = total_to - total_from;
-    let total_pct_change = if total_from > 0.0 {
-        (total_change / total_from) * 100.0
-    } else {
-        0.0
-    };
+    writeln!(file, "> **Note:** All values are shown in each company's original currency. Percentage changes reflect actual local currency performance.")?;
+    writeln!(file)?;
 
+    // Overview statistics
     writeln!(file, "## Overview Statistics")?;
+    let total_companies = comparisons.len();
+    let companies_with_data = comparisons
+        .iter()
+        .filter(|c| c.market_cap_from.is_some() && c.market_cap_to.is_some())
+        .count();
+    writeln!(file, "- Total companies tracked: {}", total_companies)?;
     writeln!(
         file,
-        "- Total Market Cap on {}: ${:.2}B",
-        from_date,
-        total_from / 1_000_000_000.0
-    )?;
-    writeln!(
-        file,
-        "- Total Market Cap on {}: ${:.2}B",
-        to_date,
-        total_to / 1_000_000_000.0
-    )?;
-    writeln!(
-        file,
-        "- Total Change: ${:.2}B ({:.2}%)",
-        total_change / 1_000_000_000.0,
-        total_pct_change
+        "- Companies with data for both dates: {}",
+        companies_with_data
     )?;
     writeln!(file)?;
 
@@ -482,16 +406,18 @@ fn export_summary_report(
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         let pct = comp.percentage_change.unwrap();
         let abs_change = comp.absolute_change.unwrap_or(0.0);
+        let currency = comp.original_currency.as_deref().unwrap_or("USD");
 
         writeln!(
             file,
-            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): +{:.2}% (${:.2}M increase)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): +{:.2}% ({:.2}M {} increase)",
             i + 1,
             comp.name,
             comp.ticker,
             comp.ticker,
             pct,
-            abs_change / 1_000_000.0
+            abs_change / 1_000_000.0,
+            currency
         )?;
     }
     writeln!(file)?;
@@ -506,21 +432,28 @@ fn export_summary_report(
     });
 
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+        let currency = comp.original_currency.as_deref().unwrap_or("USD");
         writeln!(
             file,
-            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}% (${:.2}M decrease)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}% ({:.2}M {} decrease)",
             i + 1,
             comp.name,
             comp.ticker,
             comp.ticker,
             comp.percentage_change.unwrap(),
-            comp.absolute_change.unwrap_or(0.0) / 1_000_000.0
+            comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000.0,
+            currency
         )?;
     }
     writeln!(file)?;
 
-    // Top 10 by absolute gain
+    // Top 10 by absolute gain (note: different currencies, so not directly comparable)
     writeln!(file, "## Top 10 by Absolute Gain")?;
+    writeln!(
+        file,
+        "_Note: Values are in original currencies and may not be directly comparable._"
+    )?;
+    writeln!(file)?;
     valid_comparisons.sort_by(|a, b| {
         b.absolute_change
             .unwrap_or(0.0)
@@ -529,14 +462,16 @@ fn export_summary_report(
     });
 
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
+        let currency = comp.original_currency.as_deref().unwrap_or("USD");
         writeln!(
             file,
-            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B gain ({:.2}%)",
+            "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}B {} gain ({:.2}%)",
             i + 1,
             comp.name,
             comp.ticker,
             comp.ticker,
             comp.absolute_change.unwrap_or(0.0) / 1_000_000_000.0,
+            currency,
             comp.percentage_change.unwrap_or(0.0)
         )?;
     }
@@ -544,6 +479,11 @@ fn export_summary_report(
 
     // Top 10 by absolute loss
     writeln!(file, "## Top 10 by Absolute Loss")?;
+    writeln!(
+        file,
+        "_Note: Values are in original currencies and may not be directly comparable._"
+    )?;
+    writeln!(file)?;
     valid_comparisons.sort_by(|a, b| {
         a.absolute_change
             .unwrap_or(0.0)
@@ -553,14 +493,16 @@ fn export_summary_report(
 
     for (i, comp) in valid_comparisons.iter().take(10).enumerate() {
         if comp.absolute_change.unwrap_or(0.0) < 0.0 {
+            let currency = comp.original_currency.as_deref().unwrap_or("USD");
             writeln!(
                 file,
-                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): ${:.2}B loss ({:.2}%)",
+                "{}. **{}** ([{}](https://finance.yahoo.com/quote/{}/)): {:.2}B {} loss ({:.2}%)",
                 i + 1,
                 comp.name,
                 comp.ticker,
                 comp.ticker,
                 comp.absolute_change.unwrap_or(0.0).abs() / 1_000_000_000.0,
+                currency,
                 comp.percentage_change.unwrap_or(0.0)
             )?;
         }
@@ -654,50 +596,6 @@ fn export_summary_report(
     )?;
     writeln!(file)?;
 
-    // Exchange rates section
-    writeln!(file, "## Exchange Rates Used for Normalization")?;
-    writeln!(file)?;
-    writeln!(
-        file,
-        "All values in this report are normalized to USD using exchange rates from **{}**.",
-        to_date
-    )?;
-    writeln!(
-        file,
-        "This eliminates currency fluctuations and shows pure market cap changes."
-    )?;
-    writeln!(file)?;
-
-    if currencies_used.is_empty() {
-        writeln!(
-            file,
-            "_All companies are USD-denominated, no currency conversion needed._"
-        )?;
-    } else {
-        writeln!(file, "| Currency | Rate to USD |")?;
-        writeln!(file, "|----------|-------------|")?;
-
-        // Sort currencies for consistent output
-        let mut sorted_currencies: Vec<_> = currencies_used.iter().collect();
-        sorted_currencies.sort();
-
-        for currency in sorted_currencies {
-            let rate_key = format!("{}/USD", currency);
-            if let Some(&rate) = rate_map.get(&rate_key) {
-                writeln!(file, "| {} | {:.6} |", currency, rate)?;
-            } else {
-                // Try reverse lookup
-                let reverse_key = format!("USD/{}", currency);
-                if let Some(&rate) = rate_map.get(&reverse_key) {
-                    writeln!(file, "| {} | {:.6} |", currency, 1.0 / rate)?;
-                } else {
-                    writeln!(file, "| {} | _not available_ |", currency)?;
-                }
-            }
-        }
-    }
-
-    writeln!(file)?;
     writeln!(file, "---")?;
     writeln!(
         file,

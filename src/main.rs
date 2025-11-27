@@ -224,7 +224,7 @@ async fn main() -> Result<()> {
             }
         }
         Some(Commands::CompareMarketCaps { from, to }) => {
-            compare_marketcaps::compare_market_caps(&pool, &from, &to).await?;
+            compare_marketcaps::compare_market_caps(&from, &to).await?;
         }
         Some(Commands::GenerateCharts { from, to }) => {
             visualizations::generate_all_charts(&from, &to).await?;

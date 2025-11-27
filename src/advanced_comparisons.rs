@@ -965,7 +965,7 @@ pub async fn compare_qoq(pool: &SqlitePool, reference_date: &str, num_quarters: 
 
 /// Perform rolling period comparison
 pub async fn compare_rolling(
-    pool: &SqlitePool,
+    _pool: &SqlitePool,
     reference_date: &str,
     period: RollingPeriod,
 ) -> Result<()> {
@@ -1004,7 +1004,7 @@ pub async fn compare_rolling(
     }
 
     // Use the existing comparison function
-    crate::compare_marketcaps::compare_market_caps(pool, &start_date_str, reference_date).await?;
+    crate::compare_marketcaps::compare_market_caps(&start_date_str, reference_date).await?;
 
     Ok(())
 }
