@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
+mod advanced_comparisons;
 mod api;
 mod compare_marketcaps;
 mod config;
@@ -80,6 +81,64 @@ enum Commands {
         #[arg(long)]
         to: String,
     },
+    /// Multi-date trend analysis (compare more than 2 dates)
+    TrendAnalysis {
+        /// Dates to compare (YYYY-MM-DD format, comma-separated)
+        #[arg(long, value_delimiter = ',')]
+        dates: Vec<String>,
+    },
+    /// Year-over-Year (YoY) comparison
+    CompareYoy {
+        /// Reference date (YYYY-MM-DD format)
+        #[arg(long)]
+        date: String,
+        /// Number of years to compare (default: 3)
+        #[arg(long, default_value = "3")]
+        years: i32,
+    },
+    /// Quarter-over-Quarter (QoQ) comparison
+    CompareQoq {
+        /// Reference date (YYYY-MM-DD format)
+        #[arg(long)]
+        date: String,
+        /// Number of quarters to compare (default: 4)
+        #[arg(long, default_value = "4")]
+        quarters: i32,
+    },
+    /// Rolling period comparison (30-day, 90-day, 1-year windows)
+    CompareRolling {
+        /// Reference date (YYYY-MM-DD format)
+        #[arg(long)]
+        date: String,
+        /// Rolling period: 30d, 90d, 180d, 1y, or custom number of days
+        #[arg(long, default_value = "30d")]
+        period: String,
+    },
+    /// Compare against a benchmark (S&P 500, MSCI indices)
+    CompareBenchmark {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        /// Benchmark to compare against: sp500, msci, or a custom ticker
+        #[arg(long, default_value = "sp500")]
+        benchmark: String,
+    },
+    /// Compare peer groups (luxury, sportswear, fast fashion, etc.)
+    ComparePeerGroups {
+        #[arg(long)]
+        from: String,
+        #[arg(long)]
+        to: String,
+        /// Peer groups to compare (comma-separated). Leave empty for all groups.
+        /// Available: luxury, sportswear, fast-fashion, department-stores, value-retail, footwear, e-commerce, asian-fashion
+        #[arg(long, value_delimiter = ',')]
+        groups: Option<Vec<String>>,
+    },
+    /// List available dates for comparison (from output directory)
+    ListAvailableDates,
+    /// List predefined peer groups
+    ListPeerGroups,
     /// Check for symbol changes that need to be applied
     CheckSymbolChanges {
         /// Path to config.toml file
@@ -169,6 +228,78 @@ async fn main() -> Result<()> {
         }
         Some(Commands::GenerateCharts { from, to }) => {
             visualizations::generate_all_charts(&from, &to).await?;
+        }
+        Some(Commands::TrendAnalysis { dates }) => {
+            if dates.len() < 2 {
+                anyhow::bail!("At least 2 dates are required for trend analysis");
+            }
+            advanced_comparisons::multi_date_comparison(&pool, dates).await?;
+        }
+        Some(Commands::CompareYoy { date, years }) => {
+            advanced_comparisons::compare_yoy(&pool, &date, years).await?;
+        }
+        Some(Commands::CompareQoq { date, quarters }) => {
+            advanced_comparisons::compare_qoq(&pool, &date, quarters).await?;
+        }
+        Some(Commands::CompareRolling { date, period }) => {
+            let rolling_period = match period.to_lowercase().as_str() {
+                "30d" => advanced_comparisons::RollingPeriod::Days30,
+                "90d" => advanced_comparisons::RollingPeriod::Days90,
+                "180d" => advanced_comparisons::RollingPeriod::Days180,
+                "1y" | "1year" | "365d" => advanced_comparisons::RollingPeriod::Year1,
+                _ => {
+                    // Try to parse as number of days
+                    let days: i64 = period
+                        .trim_end_matches('d')
+                        .parse()
+                        .map_err(|_| anyhow::anyhow!(
+                            "Invalid period '{}'. Use: 30d, 90d, 180d, 1y, or a number of days (e.g., 45d)",
+                            period
+                        ))?;
+                    advanced_comparisons::RollingPeriod::Custom(days)
+                }
+            };
+            advanced_comparisons::compare_rolling(&pool, &date, rolling_period).await?;
+        }
+        Some(Commands::CompareBenchmark {
+            from,
+            to,
+            benchmark,
+        }) => {
+            let bench = match benchmark.to_lowercase().as_str() {
+                "sp500" | "s&p500" | "spy" => advanced_comparisons::Benchmark::SP500,
+                "msci" | "msci_world" | "urth" => advanced_comparisons::Benchmark::MSCI,
+                _ => advanced_comparisons::Benchmark::Custom(benchmark),
+            };
+            advanced_comparisons::compare_with_benchmark(&pool, &from, &to, bench).await?;
+        }
+        Some(Commands::ComparePeerGroups { from, to, groups }) => {
+            advanced_comparisons::compare_peer_groups(&pool, &from, &to, groups).await?;
+        }
+        Some(Commands::ListAvailableDates) => {
+            let dates = advanced_comparisons::get_available_dates()?;
+            if dates.is_empty() {
+                println!("No market cap data files found in output/ directory.");
+                println!("Run 'fetch-specific-date-market-caps YYYY-MM-DD' to fetch data.");
+            } else {
+                println!("Available dates for comparison ({} found):", dates.len());
+                for date in dates {
+                    println!("  {}", date);
+                }
+            }
+        }
+        Some(Commands::ListPeerGroups) => {
+            let groups = advanced_comparisons::get_predefined_peer_groups();
+            println!("Predefined Peer Groups:");
+            println!();
+            for group in groups {
+                println!("  {} ({} tickers)", group.name, group.tickers.len());
+                if let Some(desc) = &group.description {
+                    println!("    {}", desc);
+                }
+                println!("    Tickers: {}", group.tickers.join(", "));
+                println!();
+            }
         }
         Some(Commands::CheckSymbolChanges { config }) => {
             let api_key = env::var("FINANCIALMODELINGPREP_API_KEY")
