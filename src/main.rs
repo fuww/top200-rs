@@ -20,6 +20,7 @@ mod symbol_changes;
 mod ticker_details;
 mod utils;
 mod visualizations;
+mod web;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -156,6 +157,12 @@ enum Commands {
         /// Automatically apply all non-conflicting changes
         #[arg(long)]
         auto_apply: bool,
+    },
+    /// Start the web server
+    Serve {
+        /// Port to bind to
+        #[arg(long, default_value = "3000")]
+        port: u16,
     },
 }
 
@@ -336,9 +343,19 @@ async fn main() -> Result<()> {
                 .await?;
             } else {
                 // Interactive mode - ask user to confirm
-                println!("\nFound {} applicable changes. Run with --auto-apply to apply them or --dry-run to preview.", 
+                println!("\nFound {} applicable changes. Run with --auto-apply to apply them or --dry-run to preview.",
                     report.applicable_changes.len());
             }
+        }
+        Some(Commands::Serve { port }) => {
+            // Load configuration
+            let config = config::load_config()?;
+
+            // Create app state
+            let state = web::AppState::new(pool, config);
+
+            // Start the web server
+            web::server::start_server(state, port).await?;
         }
         None => {
             marketcaps::marketcaps(&pool).await?;

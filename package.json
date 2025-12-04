@@ -1,0 +1,12 @@
+{
+  "name": "top200-rs",
+  "version": "1.0.0",
+  "description": "Market cap tracking web interface",
+  "scripts": {
+    "build:css": "tailwindcss -i ./input.css -o ./static/css/output.css",
+    "watch:css": "tailwindcss -i ./input.css -o ./static/css/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

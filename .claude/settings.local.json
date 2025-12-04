@@ -12,7 +12,8 @@
       "Bash(grep:*)",
       "Bash(export DATABASE_URL=sqlite:data.db)",
       "Bash(pushd:*)",
-      "Bash(popd:*)"
+      "Bash(popd:*)",
+      "Bash(pnpm install:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
