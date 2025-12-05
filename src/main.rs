@@ -15,6 +15,7 @@ mod historical_marketcaps;
 mod marketcaps;
 mod models;
 mod monthly_historical_marketcaps;
+mod nats;
 mod specific_date_marketcaps;
 mod symbol_changes;
 mod ticker_details;
@@ -364,8 +365,27 @@ async fn main() -> Result<()> {
                 "default-secret-change-in-production".to_string()
             });
 
+            // Initialize NATS client
+            let nats_url = env::var("NATS_URL").unwrap_or_else(|_| {
+                println!("⚠️  NATS_URL not set, using default: nats://127.0.0.1:4222");
+                "nats://127.0.0.1:4222".to_string()
+            });
+
+            let nats_client = nats::create_nats_client(&nats_url).await?;
+
+            // Set up JetStream streams
+            nats::setup_streams(&nats_client).await?;
+
+            // Start background worker
+            let worker_client = nats_client.clone();
+            tokio::spawn(async move {
+                if let Err(e) = nats::start_worker(worker_client).await {
+                    eprintln!("Worker error: {}", e);
+                }
+            });
+
             // Create app state
-            let state = web::AppState::new(pool, config, workos_client, jwt_secret);
+            let state = web::AppState::new(pool, config, workos_client, jwt_secret, nats_client);
 
             // Start the web server
             web::server::start_server(state, port).await?;

@@ -78,7 +78,7 @@
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "org.rust.first.attach.projects": "true",
-    "settings.editor.selected.configurable": "settings.sync",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -135,7 +135,7 @@
       <workItem from="1756303549182" duration="2632000" />
       <workItem from="1756711032548" duration="3783000" />
       <workItem from="1756730623518" duration="802000" />
-      <workItem from="1764951110786" duration="8463000" />
+      <workItem from="1764951110786" duration="9605000" />
     </task>
     <servers />
   </component>

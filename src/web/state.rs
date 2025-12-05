@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 use crate::config::Config;
+use crate::nats::NatsClient;
 use sqlx::SqlitePool;
 use workos::WorkOs;
 
@@ -13,6 +14,7 @@ pub struct AppState {
     pub config: Config,
     pub workos_client: WorkOs,
     pub jwt_secret: String,
+    pub nats_client: NatsClient,
 }
 
 impl AppState {
@@ -21,12 +23,14 @@ impl AppState {
         config: Config,
         workos_client: WorkOs,
         jwt_secret: String,
+        nats_client: NatsClient,
     ) -> Self {
         Self {
             db_pool,
             config,
             workos_client,
             jwt_secret,
+            nats_client,
         }
     }
 }
