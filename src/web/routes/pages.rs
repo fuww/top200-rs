@@ -153,3 +153,27 @@ pub async fn market_cap_view(
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     ))
 }
+
+// ============================================================================
+// Form Page Handlers
+// ============================================================================
+
+#[derive(Template)]
+#[template(path = "comparisons/new.html")]
+struct NewComparisonTemplate {}
+
+/// New comparison form page
+pub async fn new_comparison(State(_state): State<AppState>) -> Html<String> {
+    let template = NewComparisonTemplate {};
+    Html(template.render().unwrap())
+}
+
+#[derive(Template)]
+#[template(path = "market_caps/fetch.html")]
+struct FetchMarketCapsTemplate {}
+
+/// Fetch market caps form page
+pub async fn fetch_market_caps_page(State(_state): State<AppState>) -> Html<String> {
+    let template = FetchMarketCapsTemplate {};
+    Html(template.render().unwrap())
+}

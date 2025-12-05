@@ -22,12 +22,17 @@ pub fn create_app(state: AppState) -> Router {
         .route("/", get(routes::pages::dashboard))
         // Comparison pages
         .route("/comparisons", get(routes::pages::comparisons_list))
+        .route("/comparisons/new", get(routes::pages::new_comparison))
         .route(
             "/comparisons/:from/:to",
             get(routes::pages::comparison_view),
         )
         // Market cap pages
         .route("/market-caps", get(routes::pages::market_caps_list))
+        .route(
+            "/market-caps/fetch",
+            get(routes::pages::fetch_market_caps_page),
+        )
         .route("/market-caps/:date", get(routes::pages::market_cap_view))
         // API endpoints
         .route("/api/comparisons", get(routes::api::list_comparisons))
@@ -38,6 +43,15 @@ pub fn create_app(state: AppState) -> Router {
         .route("/api/charts/:from/:to/:type", get(routes::api::get_chart))
         .route("/api/market-caps", get(routes::api::list_market_caps))
         .route("/api/market-caps/:date", get(routes::api::get_market_cap))
+        // SSE endpoints for data generation
+        .route(
+            "/api/generate-comparison-sse",
+            get(routes::sse::generate_comparison_sse),
+        )
+        .route(
+            "/api/fetch-market-caps-sse",
+            get(routes::sse::fetch_market_caps_sse),
+        )
         // Static file serving
         .nest_service("/static", ServeDir::new("static"))
         // Share app state

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Fetch Market Caps - Top200-rs{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Fetch Market Caps</h1>
+        <p class="text-gray-600 mt-2">Fetch market capitalization data for a specific date</p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-md p-6">
+        <form id="fetchForm">
+            <div class="space-y-6">
+                <!-- Date -->
+                <div>
+                    <label for="date" class="block text-sm font-medium text-gray-700 mb-2">
+                        Date
+                    </label>
+                    <input
+                        type="date"
+                        id="date"
+                        name="date"
+                        required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <p class="mt-2 text-sm text-gray-500">
+                        Select the date for which to fetch market cap data
+                    </p>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex items-center justify-between">
+                    <a href="/market-caps" class="text-gray-600 hover:text-gray-900">
+                        &larr; Back to market caps
+                    </a>
+                    <button
+                        type="submit"
+                        id="submitBtn"
+                        class="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Fetch Data
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Progress Section -->
+    <div id="progressSection" class="mt-6 bg-white rounded-lg shadow-md p-6" style="display: none;">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Progress</h3>
+
+        <!-- Overall Progress -->
+        <div class="mb-4">
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-700">Fetching market caps</span>
+                <span class="text-sm font-medium text-gray-700" id="progress_text">0 / 0</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div id="progress_bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Current Ticker -->
+        <div class="mb-4">
+            <p class="text-sm text-gray-600">
+                Current: <span class="font-mono font-medium text-gray-900" id="current_ticker">-</span>
+            </p>
+        </div>
+
+        <!-- Recent Tickers Log -->
+        <div class="mt-4">
+            <p class="text-xs font-medium text-gray-500 uppercase mb-2">Recent Updates</p>
+            <div class="bg-gray-50 rounded-md p-3 max-h-40 overflow-y-auto">
+                <div id="log" class="space-y-1 font-mono text-xs text-gray-700"></div>
+            </div>
+        </div>
+
+        <!-- Result Messages -->
+        <div id="resultContainer" class="mt-6" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+document.getElementById('fetchForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const date = document.getElementById('date').value;
+
+    if (!date) {
+        alert('Please select a date');
+        return;
+    }
+
+    // Show progress section
+    document.getElementById('progressSection').style.display = 'block';
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').textContent = 'Fetching...';
+
+    // Reset progress
+    document.getElementById('progress_bar').style.width = '0%';
+    document.getElementById('progress_text').textContent = '0 / 0';
+    document.getElementById('current_ticker').textContent = '-';
+    document.getElementById('log').innerHTML = '';
+    document.getElementById('resultContainer').style.display = 'none';
+
+    // Start SSE connection
+    const eventSource = new EventSource(`/api/fetch-market-caps-sse?date=${date}`);
+
+    eventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'progress' && data.progress) {
+            const { current, total, ticker } = data.progress;
+            const percent = Math.round((current / total) * 100);
+
+            document.getElementById('progress_bar').style.width = percent + '%';
+            document.getElementById('progress_text').textContent = `${current} / ${total}`;
+
+            if (ticker) {
+                document.getElementById('current_ticker').textContent = ticker;
+
+                // Add to log
+                const log = document.getElementById('log');
+                const entry = document.createElement('div');
+                entry.textContent = `✓ ${ticker}`;
+                log.appendChild(entry);
+
+                // Auto-scroll to bottom
+                log.parentElement.scrollTop = log.parentElement.scrollHeight;
+            }
+        } else if (data.type === 'success') {
+            eventSource.close();
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').textContent = 'Fetch Data';
+
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.style.display = 'block';
+            resultContainer.innerHTML = `
+                <div class="bg-green-50 border border-green-200 rounded-md p-4">
+                    <div class="flex">
+                        <svg class="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-green-800">Market caps fetched successfully!</p>
+                            <p class="mt-2 text-sm text-green-700">
+                                <a href="/market-caps/${date}" class="font-medium underline hover:text-green-900">
+                                    View market cap snapshot &rarr;
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (data.type === 'error') {
+            eventSource.close();
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('submitBtn').textContent = 'Fetch Data';
+
+            const resultContainer = document.getElementById('resultContainer');
+            resultContainer.style.display = 'block';
+            resultContainer.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-md p-4">
+                    <div class="flex">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        <div class="ml-3">
+                            <p class="text-sm font-medium text-red-800">Error fetching market caps</p>
+                            <p class="mt-1 text-sm text-red-700">${data.error || 'Unknown error occurred'}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    };
+
+    eventSource.onerror = function() {
+        eventSource.close();
+        document.getElementById('submitBtn').disabled = false;
+        document.getElementById('submitBtn').textContent = 'Fetch Data';
+
+        const resultContainer = document.getElementById('resultContainer');
+        resultContainer.style.display = 'block';
+        resultContainer.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-md p-4">
+                <div class="flex">
+                    <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                    </svg>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-red-800">Connection error</p>
+                        <p class="mt-1 text-sm text-red-700">Failed to connect to server</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+});
+</script>
+{% endblock %}
