@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Top200-rs</title>
+    <link rel="stylesheet" href="/static/css/output.css">
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full space-y-8 p-8">
+        <!-- Logo/Header -->
+        <div class="text-center">
+            <h1 class="text-4xl font-bold text-blue-600 mb-2">Top200-rs</h1>
+            <p class="text-gray-600">Market Cap Tracking and Analysis</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="card bg-white">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6 text-center">Sign In</h2>
+
+            {% if let Some(error_msg) = error %}
+            <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-red-700">{{ error_msg }}</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <p class="text-gray-600 text-center mb-6">
+                Sign in with your organization account to access the dashboard.
+            </p>
+
+            <!-- WorkOS Login Button -->
+            <a href="{{ authorization_url }}" class="btn-primary w-full text-center block">
+                <div class="flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Sign in with WorkOS
+                </div>
+            </a>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-500">
+                    Secure authentication powered by WorkOS
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-sm text-gray-500">
+            <p>Top200-rs &copy; 2025</p>
+            <p class="mt-1">Market Cap Tracking and Analysis Platform</p>
+        </div>
+    </div>
+</body>
+</html>

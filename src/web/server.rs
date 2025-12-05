@@ -18,7 +18,11 @@ pub fn create_app(state: AppState) -> Router {
     Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
-        // Dashboard page
+        // Authentication routes (no auth required)
+        .route("/login", get(routes::auth::login_page))
+        .route("/api/auth/callback", get(routes::auth::auth_callback))
+        .route("/api/auth/logout", get(routes::auth::logout))
+        // Dashboard page (will require auth later)
         .route("/", get(routes::pages::dashboard))
         // Static file serving
         .nest_service("/static", ServeDir::new("static"))

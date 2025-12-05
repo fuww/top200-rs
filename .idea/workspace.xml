@@ -5,9 +5,16 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/routes/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/routes/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/server.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/server.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/state.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/state.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

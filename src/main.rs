@@ -351,8 +351,21 @@ async fn main() -> Result<()> {
             // Load configuration
             let config = config::load_config()?;
 
+            // Initialize WorkOS client
+            let workos_api_key = env::var("WORKOS_API_KEY")
+                .expect("WORKOS_API_KEY must be set");
+            let api_key = workos::ApiKey::from(workos_api_key.as_str());
+            let workos_client = workos::WorkOs::new(&api_key);
+
+            // Get JWT secret
+            let jwt_secret = env::var("JWT_SECRET")
+                .unwrap_or_else(|_| {
+                    println!("⚠️  Warning: JWT_SECRET not set, using default (insecure for production!)");
+                    "default-secret-change-in-production".to_string()
+                });
+
             // Create app state
-            let state = web::AppState::new(pool, config);
+            let state = web::AppState::new(pool, config, workos_client, jwt_secret);
 
             // Start the web server
             web::server::start_server(state, port).await?;

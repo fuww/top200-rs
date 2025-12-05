@@ -13,7 +13,9 @@
       "Bash(export DATABASE_URL=sqlite:data.db)",
       "Bash(pushd:*)",
       "Bash(popd:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "mcp__context7__get-library-docs",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
