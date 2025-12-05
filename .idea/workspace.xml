@@ -12,8 +12,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data.db" beforeDir="false" afterPath="$PROJECT_DIR$/data.db" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.mcp.json" beforeDir="false" afterPath="$PROJECT_DIR$/.mcp.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,7 +67,7 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "git-widget-placeholder": "b271f2cf",
+    "git-widget-placeholder": "d2c90866",
     "junie.onboarding.icon.badge.shown": "true",
     "last_opened_file_path": "/Users/joost/git/fuww/top200-rs",
     "node.js.detected.package.eslint": "true",
@@ -134,7 +135,7 @@
       <workItem from="1756303549182" duration="2632000" />
       <workItem from="1756711032548" duration="3783000" />
       <workItem from="1756730623518" duration="802000" />
-      <workItem from="1764951110786" duration="7386000" />
+      <workItem from="1764951110786" duration="8463000" />
     </task>
     <servers />
   </component>

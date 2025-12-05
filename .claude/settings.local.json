@@ -15,7 +15,11 @@
       "Bash(popd:*)",
       "Bash(pnpm install:*)",
       "mcp__context7__get-library-docs",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:nats.io)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.nats.io)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",
