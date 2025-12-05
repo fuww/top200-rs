@@ -12,9 +12,10 @@ use serde_json::json;
 use crate::web::{state::AppState, utils};
 
 /// List all available comparisons
-pub async fn list_comparisons(State(_state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
-    let comparisons = utils::list_comparisons()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+pub async fn list_comparisons(
+    State(_state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let comparisons = utils::list_comparisons().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(json!({
         "comparisons": comparisons
@@ -27,8 +28,7 @@ pub async fn get_comparison(
     Path((from_date, to_date)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     // Find the comparison file
-    let comparisons = utils::list_comparisons()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let comparisons = utils::list_comparisons().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let comparison = comparisons
         .iter()
@@ -58,8 +58,7 @@ pub async fn get_chart(
     Path((from_date, to_date, chart_type)): Path<(String, String, String)>,
 ) -> Result<Response, StatusCode> {
     // Find the comparison file
-    let comparisons = utils::list_comparisons()
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let comparisons = utils::list_comparisons().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let comparison = comparisons
         .iter()
@@ -74,8 +73,8 @@ pub async fn get_chart(
         .ok_or(StatusCode::NOT_FOUND)?;
 
     // Read the SVG file
-    let svg_content = utils::read_chart_svg(&chart.path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let svg_content =
+        utils::read_chart_svg(&chart.path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok((
         StatusCode::OK,
@@ -83,4 +82,42 @@ pub async fn get_chart(
         svg_content,
     )
         .into_response())
+}
+
+// ============================================================================
+// Market Cap Snapshot API Endpoints
+// ============================================================================
+
+/// List all available market cap snapshots
+pub async fn list_market_caps(
+    State(_state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let snapshots = utils::list_market_caps().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "snapshots": snapshots
+    })))
+}
+
+/// Get market cap data for a specific date
+pub async fn get_market_cap(
+    State(_state): State<AppState>,
+    Path(date): Path<String>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Find the market cap file for the date
+    let snapshots = utils::list_market_caps().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let snapshot = snapshots
+        .iter()
+        .find(|s| s.date == date)
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    // Read market cap data
+    let records = utils::read_marketcap_csv(&snapshot.csv_path)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(json!({
+        "metadata": snapshot,
+        "records": records
+    })))
 }

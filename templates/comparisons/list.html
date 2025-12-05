@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Market Cap Comparisons{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Market Cap Comparisons</h1>
+        <p class="text-gray-600">View historical comparisons of market capitalization data</p>
+    </div>
+
+    {% if comparisons.is_empty() %}
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <svg class="mx-auto h-12 w-12 text-yellow-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h3 class="text-lg font-medium text-yellow-900 mb-2">No Comparisons Found</h3>
+        <p class="text-yellow-700">No comparison files found in the output directory. Generate a comparison using the CLI to see results here.</p>
+        <div class="mt-4 bg-yellow-100 rounded p-4 text-left text-sm font-mono text-yellow-900">
+            <p class="mb-1">Example commands:</p>
+            <p class="ml-4">cargo run -- fetch-specific-date-market-caps 2025-01-01</p>
+            <p class="ml-4">cargo run -- fetch-specific-date-market-caps 2025-02-01</p>
+            <p class="ml-4">cargo run -- compare-market-caps --from 2025-01-01 --to 2025-02-01</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {% for comparison in comparisons %}
+        <a href="/comparisons/{{ comparison.from_date }}/{{ comparison.to_date }}"
+           class="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden border border-gray-200">
+            <div class="p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-2">
+                        <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                        <span class="text-sm font-medium text-gray-500">Comparison</span>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {{ comparison.chart_paths.len() }} charts
+                    </span>
+                </div>
+
+                <div class="space-y-3">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm font-medium text-gray-500">From:</span>
+                        <span class="text-base font-semibold text-gray-900">{{ comparison.from_date }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-center">
+                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+                        </svg>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <span class="text-sm font-medium text-gray-500">To:</span>
+                        <span class="text-base font-semibold text-gray-900">{{ comparison.to_date }}</span>
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <div class="flex items-center justify-between text-xs text-gray-500">
+                        <span>Generated: {{ comparison.timestamp }}</span>
+                        {% if comparison.summary_path.is_some() %}
+                        <span class="inline-flex items-center text-green-600">
+                            <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            Summary
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 px-6 py-3 border-t border-gray-200">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-blue-600">View Details</span>
+                    <svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

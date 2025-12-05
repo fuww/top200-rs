@@ -91,7 +91,11 @@ pub fn list_comparisons() -> Result<Vec<ComparisonMetadata>> {
 /// Parse comparison filename to extract metadata
 fn parse_comparison_filename(filename: &str, csv_path: &Path) -> Option<ComparisonMetadata> {
     // Expected format: comparison_{from}_to_{to}_{timestamp}.csv
-    let parts: Vec<&str> = filename.strip_prefix("comparison_")?.strip_suffix(".csv")?.split('_').collect();
+    let parts: Vec<&str> = filename
+        .strip_prefix("comparison_")?
+        .strip_suffix(".csv")?
+        .split('_')
+        .collect();
 
     if parts.len() < 4 {
         return None;
@@ -125,7 +129,10 @@ fn find_file_with_pattern(base: &str, middle: &str, ext: &str) -> Option<PathBuf
     if let Ok(entries) = fs::read_dir(output_dir) {
         for entry in entries.flatten() {
             if let Some(filename) = entry.file_name().to_str() {
-                if filename.starts_with(base) && filename.contains(middle) && filename.ends_with(ext) {
+                if filename.starts_with(base)
+                    && filename.contains(middle)
+                    && filename.ends_with(ext)
+                {
                     return Some(entry.path());
                 }
             }
@@ -207,6 +214,125 @@ pub fn format_date(date: &NaiveDate) -> String {
     date.format("%Y-%m-%d").to_string()
 }
 
+// ============================================================================
+// Market Cap Snapshot Utilities
+// ============================================================================
+
+/// Metadata about a market cap snapshot for a specific date
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketCapMetadata {
+    pub date: String,
+    pub timestamp: String,
+    pub csv_path: PathBuf,
+    pub total_companies: usize,
+}
+
+/// Market cap data from snapshot CSV
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MarketCapRecord {
+    #[serde(rename = "Rank")]
+    pub rank: Option<usize>,
+    #[serde(rename = "Ticker")]
+    pub ticker: String,
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "Market Cap (Original)")]
+    pub market_cap_original: Option<f64>,
+    #[serde(rename = "Original Currency")]
+    pub original_currency: Option<String>,
+    #[serde(rename = "Market Cap (EUR)")]
+    pub market_cap_eur: Option<f64>,
+    #[serde(rename = "Market Cap (USD)")]
+    pub market_cap_usd: Option<f64>,
+    #[serde(rename = "Exchange")]
+    pub exchange: Option<String>,
+    #[serde(rename = "Price")]
+    pub price: Option<f64>,
+}
+
+/// Scan the output directory for market cap snapshot files
+pub fn list_market_caps() -> Result<Vec<MarketCapMetadata>> {
+    let output_dir = Path::new("output");
+
+    if !output_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut snapshots: Vec<MarketCapMetadata> = Vec::new();
+    let entries = fs::read_dir(output_dir)?;
+
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Look for market cap CSV files
+        if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+            if filename.starts_with("marketcaps_") && filename.ends_with(".csv") {
+                // Parse filename: marketcaps_{date}_{timestamp}.csv
+                if let Some(metadata) = parse_marketcap_filename(filename, &path) {
+                    snapshots.push(metadata);
+                }
+            }
+        }
+    }
+
+    // Sort by date (most recent first)
+    snapshots.sort_by(|a, b| b.date.cmp(&a.date));
+
+    Ok(snapshots)
+}
+
+/// Parse market cap filename to extract metadata
+fn parse_marketcap_filename(filename: &str, csv_path: &Path) -> Option<MarketCapMetadata> {
+    // Expected format: marketcaps_{date}_{timestamp}.csv
+    let parts: Vec<&str> = filename
+        .strip_prefix("marketcaps_")?
+        .strip_suffix(".csv")?
+        .split('_')
+        .collect();
+
+    // Should have at least date (YYYY-MM-DD = 3 parts) + timestamp
+    if parts.len() < 4 {
+        return None;
+    }
+
+    // Parse date: YYYY-MM-DD
+    let date = parts[..3].join("-");
+    let timestamp = parts[3..].join("_");
+
+    // Get total companies by reading the CSV
+    let total_companies = fs::File::open(csv_path)
+        .ok()
+        .and_then(|file| {
+            let mut reader = Reader::from_reader(file);
+            reader.records().count().into()
+        })
+        .unwrap_or(0);
+
+    Some(MarketCapMetadata {
+        date,
+        timestamp,
+        csv_path: csv_path.to_path_buf(),
+        total_companies,
+    })
+}
+
+/// Read and parse a market cap snapshot CSV file
+pub fn read_marketcap_csv(path: &Path) -> Result<Vec<MarketCapRecord>> {
+    let file = fs::File::open(path)
+        .with_context(|| format!("Failed to open market cap file: {}", path.display()))?;
+
+    let mut reader = Reader::from_reader(file);
+    let mut records = Vec::new();
+
+    for result in reader.deserialize() {
+        let record: MarketCapRecord = result?;
+        records.push(record);
+    }
+
+    Ok(records)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +349,18 @@ mod tests {
         assert_eq!(metadata.from_date, "2025-01-01");
         assert_eq!(metadata.to_date, "2025-02-01");
         assert_eq!(metadata.timestamp, "120000");
+    }
+
+    #[test]
+    fn test_parse_marketcap_filename() {
+        let path = Path::new("output/marketcaps_2025-01-01_20250101_120000.csv");
+        let filename = "marketcaps_2025-01-01_20250101_120000.csv";
+
+        let metadata = parse_marketcap_filename(filename, path);
+        assert!(metadata.is_some());
+
+        let metadata = metadata.unwrap();
+        assert_eq!(metadata.date, "2025-01-01");
+        assert_eq!(metadata.timestamp, "20250101_120000");
     }
 }

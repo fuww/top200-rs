@@ -16,7 +16,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db_pool: SqlitePool, config: Config, workos_client: WorkOs, jwt_secret: String) -> Self {
+    pub fn new(
+        db_pool: SqlitePool,
+        config: Config,
+        workos_client: WorkOs,
+        jwt_secret: String,
+    ) -> Self {
         Self {
             db_pool,
             config,

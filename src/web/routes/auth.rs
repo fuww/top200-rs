@@ -12,9 +12,8 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::Deserialize;
 use workos::sso::{
-    GetAuthorizationUrl, GetAuthorizationUrlParams,
-    GetProfileAndToken, GetProfileAndTokenParams,
-    AuthorizationCode, ClientId, ConnectionSelector, Provider,
+    AuthorizationCode, ClientId, ConnectionSelector, GetAuthorizationUrl,
+    GetAuthorizationUrlParams, GetProfileAndToken, GetProfileAndTokenParams, Provider,
 };
 
 use crate::web::{models::auth::Claims, state::AppState};
@@ -29,8 +28,8 @@ struct LoginTemplate {
 /// Login page - shows WorkOS authorization button
 pub async fn login_page(State(state): State<AppState>) -> Result<Html<String>, StatusCode> {
     // Get configuration from environment
-    let client_id = std::env::var("WORKOS_CLIENT_ID")
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client_id =
+        std::env::var("WORKOS_CLIENT_ID").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let redirect_uri = std::env::var("WORKOS_REDIRECT_URI")
         .unwrap_or_else(|_| "http://localhost:3000/api/auth/callback".to_string());
 
@@ -55,7 +54,9 @@ pub async fn login_page(State(state): State<AppState>) -> Result<Html<String>, S
     };
 
     Ok(Html(
-        template.render().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        template
+            .render()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
     ))
 }
 
@@ -70,8 +71,8 @@ pub async fn auth_callback(
     State(state): State<AppState>,
 ) -> Result<Response, StatusCode> {
     // Get client ID from environment
-    let client_id = std::env::var("WORKOS_CLIENT_ID")
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let client_id =
+        std::env::var("WORKOS_CLIENT_ID").map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Exchange authorization code for profile and token
     let params = GetProfileAndTokenParams {
@@ -123,7 +124,10 @@ pub async fn auth_callback(
 
     Ok((
         StatusCode::SEE_OTHER,
-        [(header::SET_COOKIE, cookie), (header::LOCATION, "/".to_string())],
+        [
+            (header::SET_COOKIE, cookie),
+            (header::LOCATION, "/".to_string()),
+        ],
     )
         .into_response())
 }
@@ -134,7 +138,10 @@ pub async fn logout() -> impl IntoResponse {
 
     (
         StatusCode::SEE_OTHER,
-        [(header::SET_COOKIE, cookie), (header::LOCATION, "/login".to_string())],
+        [
+            (header::SET_COOKIE, cookie),
+            (header::LOCATION, "/login".to_string()),
+        ],
     )
 }
 
@@ -144,10 +151,7 @@ fn is_admin_email(email: &str) -> bool {
     // Simple example: check if email is in admin list
     // In production, use database or WorkOS directory roles
     let admin_emails_env = std::env::var("ADMIN_EMAILS").unwrap_or_default();
-    let admin_emails: Vec<_> = admin_emails_env
-        .split(',')
-        .map(|s| s.trim())
-        .collect();
+    let admin_emails: Vec<_> = admin_emails_env.split(',').map(|s| s.trim()).collect();
 
     admin_emails.contains(&email)
 }

@@ -2,14 +2,10 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use axum::{
-    routing::get,
-    Router,
-    Json,
-};
+use axum::{routing::get, Json, Router};
 use serde_json::json;
-use tower_http::services::ServeDir;
 use std::net::SocketAddr;
+use tower_http::services::ServeDir;
 
 use crate::web::{routes, state::AppState};
 
@@ -24,6 +20,24 @@ pub fn create_app(state: AppState) -> Router {
         .route("/api/auth/logout", get(routes::auth::logout))
         // Dashboard page (will require auth later)
         .route("/", get(routes::pages::dashboard))
+        // Comparison pages
+        .route("/comparisons", get(routes::pages::comparisons_list))
+        .route(
+            "/comparisons/:from/:to",
+            get(routes::pages::comparison_view),
+        )
+        // Market cap pages
+        .route("/market-caps", get(routes::pages::market_caps_list))
+        .route("/market-caps/:date", get(routes::pages::market_cap_view))
+        // API endpoints
+        .route("/api/comparisons", get(routes::api::list_comparisons))
+        .route(
+            "/api/comparisons/:from/:to",
+            get(routes::api::get_comparison),
+        )
+        .route("/api/charts/:from/:to/:type", get(routes::api::get_chart))
+        .route("/api/market-caps", get(routes::api::list_market_caps))
+        .route("/api/market-caps/:date", get(routes::api::get_market_cap))
         // Static file serving
         .nest_service("/static", ServeDir::new("static"))
         // Share app state

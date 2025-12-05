@@ -5,16 +5,18 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="f53462a1-ec57-4da1-af81-5ddcc4bbf723" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/comparisons/list.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/templates/comparisons/view.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/web/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/middleware/roles.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/middleware/roles.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/routes/api.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/routes/api.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/routes/auth.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/routes/auth.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/web/routes/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/routes/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/routes/pages.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/routes/pages.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/web/server.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/server.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/web/state.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/state.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/web/utils.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/web/utils.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -33,12 +35,8 @@
               <option name="branches">
                 <list>
                   <RecentBranch>
-                    <option name="branchName" value="compare-actions" />
-                    <option name="lastUsedInstant" value="1756305606" />
-                  </RecentBranch>
-                  <RecentBranch>
                     <option name="branchName" value="main" />
-                    <option name="lastUsedInstant" value="1756305605" />
+                    <option name="lastUsedInstant" value="1764919561" />
                   </RecentBranch>
                 </list>
               </option>
@@ -70,7 +68,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;47d121ec&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Volumes/data/git/fuww/top200-rs&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,

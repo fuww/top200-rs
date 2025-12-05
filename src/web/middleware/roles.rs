@@ -9,11 +9,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use crate::web::{
-    middleware::auth::AuthUser,
-    models::auth::Role,
-    state::AppState,
-};
+use crate::web::{middleware::auth::AuthUser, models::auth::Role, state::AppState};
 
 /// Middleware extractor that requires admin role
 pub struct RequireAdmin(pub AuthUser);
