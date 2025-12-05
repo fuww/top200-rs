@@ -6,15 +6,15 @@ use axum::{
     extract::{Query, State},
     response::sse::{Event, Sse},
 };
-use futures::{
-    stream::{self, Stream},
-    StreamExt,
-};
+use futures::stream::Stream;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::time::Duration;
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::web::state::AppState;
 
@@ -57,83 +57,148 @@ pub async fn generate_comparison_sse(
     let to_date = params.to_date.clone();
     let generate_charts = params.generate_charts;
 
-    let stream = stream::iter(
-        async move {
-            let mut events = Vec::new();
+    let (tx, rx) = mpsc::channel(32);
 
-            // Step 1: Fetch market caps for from_date
-            events.push(create_step_event(
+    tokio::spawn(async move {
+        // Step 1: Fetch market caps for from_date
+        let _ = tx
+            .send(create_step_event(
                 1,
                 "Fetching market caps for from date...",
-            ));
+            ))
+            .await;
 
-            let result = Command::new("cargo")
-                .args(&["run", "--", "fetch-specific-date-market-caps", &from_date])
-                .output()
-                .await;
+        let result = Command::new("cargo")
+            .args(&["run", "--", "fetch-specific-date-market-caps", &from_date])
+            .output()
+            .await;
 
-            match result {
-                Ok(output) if output.status.success() => {
-                    events.push(create_step_event(1, "✓ From date market caps fetched"));
-                }
-                Ok(output) => {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    events.push(create_error_event(&format!(
+        match result {
+            Ok(output) if output.status.success() => {
+                let _ = tx
+                    .send(create_step_event(1, "✓ From date market caps fetched"))
+                    .await;
+            }
+            Ok(output) => {
+                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to fetch from date market caps: {}",
                         error_msg
-                    )));
-                    return events;
-                }
-                Err(e) => {
-                    events.push(create_error_event(&format!(
+                    )))
+                    .await;
+                return;
+            }
+            Err(e) => {
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to execute command: {}",
                         e
-                    )));
-                    return events;
-                }
+                    )))
+                    .await;
+                return;
             }
+        }
 
-            sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(500)).await;
 
-            // Step 2: Fetch market caps for to_date
-            events.push(create_step_event(2, "Fetching market caps for to date..."));
+        // Step 2: Fetch market caps for to_date
+        let _ = tx
+            .send(create_step_event(2, "Fetching market caps for to date..."))
+            .await;
 
-            let result = Command::new("cargo")
-                .args(&["run", "--", "fetch-specific-date-market-caps", &to_date])
-                .output()
-                .await;
+        let result = Command::new("cargo")
+            .args(&["run", "--", "fetch-specific-date-market-caps", &to_date])
+            .output()
+            .await;
 
-            match result {
-                Ok(output) if output.status.success() => {
-                    events.push(create_step_event(2, "✓ To date market caps fetched"));
-                }
-                Ok(output) => {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    events.push(create_error_event(&format!(
+        match result {
+            Ok(output) if output.status.success() => {
+                let _ = tx
+                    .send(create_step_event(2, "✓ To date market caps fetched"))
+                    .await;
+            }
+            Ok(output) => {
+                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to fetch to date market caps: {}",
                         error_msg
-                    )));
-                    return events;
-                }
-                Err(e) => {
-                    events.push(create_error_event(&format!(
+                    )))
+                    .await;
+                return;
+            }
+            Err(e) => {
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to execute command: {}",
                         e
-                    )));
-                    return events;
-                }
+                    )))
+                    .await;
+                return;
             }
+        }
 
-            sleep(Duration::from_millis(500)).await;
+        sleep(Duration::from_millis(500)).await;
 
-            // Step 3: Generate comparison
-            events.push(create_step_event(3, "Generating comparison report..."));
+        // Step 3: Generate comparison
+        let _ = tx
+            .send(create_step_event(3, "Generating comparison report..."))
+            .await;
+
+        let result = Command::new("cargo")
+            .args(&[
+                "run",
+                "--",
+                "compare-market-caps",
+                "--from",
+                &from_date,
+                "--to",
+                &to_date,
+            ])
+            .output()
+            .await;
+
+        match result {
+            Ok(output) if output.status.success() => {
+                let _ = tx
+                    .send(create_step_event(3, "✓ Comparison report generated"))
+                    .await;
+            }
+            Ok(output) => {
+                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+                let _ = tx
+                    .send(create_error_event(&format!(
+                        "Failed to generate comparison: {}",
+                        error_msg
+                    )))
+                    .await;
+                return;
+            }
+            Err(e) => {
+                let _ = tx
+                    .send(create_error_event(&format!(
+                        "Failed to execute command: {}",
+                        e
+                    )))
+                    .await;
+                return;
+            }
+        }
+
+        sleep(Duration::from_millis(500)).await;
+
+        // Step 4: Generate charts (if requested)
+        if generate_charts {
+            let _ = tx
+                .send(create_step_event(4, "Generating visualization charts..."))
+                .await;
 
             let result = Command::new("cargo")
                 .args(&[
                     "run",
                     "--",
-                    "compare-market-caps",
+                    "generate-charts",
                     "--from",
                     &from_date,
                     "--to",
@@ -144,75 +209,36 @@ pub async fn generate_comparison_sse(
 
             match result {
                 Ok(output) if output.status.success() => {
-                    events.push(create_step_event(3, "✓ Comparison report generated"));
+                    let _ = tx.send(create_step_event(4, "✓ Charts generated")).await;
                 }
                 Ok(output) => {
                     let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    events.push(create_error_event(&format!(
-                        "Failed to generate comparison: {}",
-                        error_msg
-                    )));
-                    return events;
-                }
-                Err(e) => {
-                    events.push(create_error_event(&format!(
-                        "Failed to execute command: {}",
-                        e
-                    )));
-                    return events;
-                }
-            }
-
-            sleep(Duration::from_millis(500)).await;
-
-            // Step 4: Generate charts (if requested)
-            if generate_charts {
-                events.push(create_step_event(4, "Generating visualization charts..."));
-
-                let result = Command::new("cargo")
-                    .args(&[
-                        "run",
-                        "--",
-                        "generate-charts",
-                        "--from",
-                        &from_date,
-                        "--to",
-                        &to_date,
-                    ])
-                    .output()
-                    .await;
-
-                match result {
-                    Ok(output) if output.status.success() => {
-                        events.push(create_step_event(4, "✓ Charts generated"));
-                    }
-                    Ok(output) => {
-                        let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                        events.push(create_error_event(&format!(
+                    let _ = tx
+                        .send(create_error_event(&format!(
                             "Failed to generate charts: {}",
                             error_msg
-                        )));
-                        return events;
-                    }
-                    Err(e) => {
-                        events.push(create_error_event(&format!(
+                        )))
+                        .await;
+                    return;
+                }
+                Err(e) => {
+                    let _ = tx
+                        .send(create_error_event(&format!(
                             "Failed to execute command: {}",
                             e
-                        )));
-                        return events;
-                    }
+                        )))
+                        .await;
+                    return;
                 }
             }
-
-            // Success!
-            events.push(create_success_event());
-
-            events
         }
-        .await,
-    );
 
-    Sse::new(stream.map(|event| Ok(event)))
+        // Success!
+        let _ = tx.send(create_success_event()).await;
+    });
+
+    let stream = ReceiverStream::new(rx).map(Ok);
+    Sse::new(stream)
 }
 
 /// SSE endpoint for fetching market caps
@@ -223,66 +249,70 @@ pub async fn fetch_market_caps_sse(
     let date = params.date.clone();
     let config = state.config.clone();
 
-    let stream = stream::iter(
-        async move {
-            let mut events = Vec::new();
+    let (tx, rx) = mpsc::channel(32);
 
-            // Get total number of tickers
-            let total_tickers = config.us_tickers.len() + config.non_us_tickers.len();
+    tokio::spawn(async move {
+        // Get total number of tickers
+        let total_tickers = config.us_tickers.len() + config.non_us_tickers.len();
 
-            events.push(create_progress_event(0, total_tickers, "Starting..."));
+        let _ = tx
+            .send(create_progress_event(0, total_tickers, "Starting..."))
+            .await;
 
-            // Execute the fetch command
-            let result = Command::new("cargo")
-                .args(&["run", "--", "fetch-specific-date-market-caps", &date])
-                .output()
-                .await;
+        // Execute the fetch command
+        let result = Command::new("cargo")
+            .args(&["run", "--", "fetch-specific-date-market-caps", &date])
+            .output()
+            .await;
 
-            match result {
-                Ok(output) if output.status.success() => {
-                    // Simulate progress updates (in real implementation, you'd parse output)
-                    for i in 1..=total_tickers {
-                        let ticker = if i <= config.us_tickers.len() {
-                            config.us_tickers.get(i - 1).cloned()
-                        } else {
-                            config
-                                .non_us_tickers
-                                .get(i - config.us_tickers.len() - 1)
-                                .cloned()
-                        };
+        match result {
+            Ok(output) if output.status.success() => {
+                // Simulate progress updates (in real implementation, you'd parse output)
+                for i in 1..=total_tickers {
+                    let ticker = if i <= config.us_tickers.len() {
+                        config.us_tickers.get(i - 1).cloned()
+                    } else {
+                        config
+                            .non_us_tickers
+                            .get(i - config.us_tickers.len() - 1)
+                            .cloned()
+                    };
 
-                        events.push(create_progress_event(
+                    let _ = tx
+                        .send(create_progress_event(
                             i,
                             total_tickers,
                             ticker.as_deref().unwrap_or("Unknown"),
-                        ));
+                        ))
+                        .await;
 
-                        sleep(Duration::from_millis(100)).await;
-                    }
-
-                    events.push(create_success_event());
+                    sleep(Duration::from_millis(50)).await;
                 }
-                Ok(output) => {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    events.push(create_error_event(&format!(
+
+                let _ = tx.send(create_success_event()).await;
+            }
+            Ok(output) => {
+                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to fetch market caps: {}",
                         error_msg
-                    )));
-                }
-                Err(e) => {
-                    events.push(create_error_event(&format!(
+                    )))
+                    .await;
+            }
+            Err(e) => {
+                let _ = tx
+                    .send(create_error_event(&format!(
                         "Failed to execute command: {}",
                         e
-                    )));
-                }
+                    )))
+                    .await;
             }
-
-            events
         }
-        .await,
-    );
+    });
 
-    Sse::new(stream.map(|event| Ok(event)))
+    let stream = ReceiverStream::new(rx).map(Ok);
+    Sse::new(stream)
 }
 
 // Helper functions to create SSE events
