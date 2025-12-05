@@ -70,6 +70,7 @@ pub async fn generate_comparison_sse(
 
         let result = Command::new("cargo")
             .args(&["run", "--", "fetch-specific-date-market-caps", &from_date])
+            .envs(std::env::vars())
             .output()
             .await;
 
@@ -109,6 +110,7 @@ pub async fn generate_comparison_sse(
 
         let result = Command::new("cargo")
             .args(&["run", "--", "fetch-specific-date-market-caps", &to_date])
+            .envs(std::env::vars())
             .output()
             .await;
 
@@ -156,6 +158,7 @@ pub async fn generate_comparison_sse(
                 "--to",
                 &to_date,
             ])
+            .envs(std::env::vars())
             .output()
             .await;
 
@@ -204,6 +207,7 @@ pub async fn generate_comparison_sse(
                     "--to",
                     &to_date,
                 ])
+                .envs(std::env::vars())
                 .output()
                 .await;
 
@@ -262,6 +266,7 @@ pub async fn fetch_market_caps_sse(
         // Execute the fetch command
         let result = Command::new("cargo")
             .args(&["run", "--", "fetch-specific-date-market-caps", &date])
+            .envs(std::env::vars())
             .output()
             .await;
 
