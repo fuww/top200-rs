@@ -104,9 +104,12 @@ fn parse_comparison_filename(filename: &str, csv_path: &Path) -> Option<Comparis
     // Find "to" separator
     let to_index = parts.iter().position(|&p| p == "to")?;
 
-    let from_date = parts[..to_index].join("-");
-    let to_date = parts[to_index + 1..parts.len() - 1].join("-");
-    let timestamp = parts.last()?.to_string();
+    // from_date is the first part (YYYY-MM-DD)
+    let from_date = parts[0].to_string();
+    // to_date is the part right after "to" (YYYY-MM-DD)
+    let to_date = parts.get(to_index + 1)?.to_string();
+    // timestamp is everything after to_date
+    let timestamp = parts[to_index + 2..].join("_");
 
     // Find associated files
     let base_pattern = format!("comparison_{}_to_{}", from_date, to_date);
@@ -348,7 +351,7 @@ mod tests {
         let metadata = metadata.unwrap();
         assert_eq!(metadata.from_date, "2025-01-01");
         assert_eq!(metadata.to_date, "2025-02-01");
-        assert_eq!(metadata.timestamp, "120000");
+        assert_eq!(metadata.timestamp, "20250201_120000");
     }
 
     #[test]
