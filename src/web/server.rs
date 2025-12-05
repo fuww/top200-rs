@@ -43,6 +43,8 @@ pub fn create_app(state: AppState) -> Router {
         .route("/api/charts/:from/:to/:type", get(routes::api::get_chart))
         .route("/api/market-caps", get(routes::api::list_market_caps))
         .route("/api/market-caps/:date", get(routes::api::get_market_cap))
+        // Job management endpoints
+        .route("/api/jobs/:job_id", get(routes::api::get_job_status))
         // SSE endpoints for data generation
         .route(
             "/api/generate-comparison-sse",
@@ -51,6 +53,10 @@ pub fn create_app(state: AppState) -> Router {
         .route(
             "/api/fetch-market-caps-sse",
             get(routes::sse::fetch_market_caps_sse),
+        )
+        .route(
+            "/api/jobs/:job_id/progress",
+            get(routes::sse::job_progress_sse),
         )
         // Static file serving
         .nest_service("/static", ServeDir::new("static"))

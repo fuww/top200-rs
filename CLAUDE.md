@@ -30,9 +30,24 @@ nix develop --command cargo run
 Create a `.env` file in the project root with:
 
 ```env
+# Database
+DATABASE_URL=sqlite:data.db
+
+# API Keys
 FMP_API_KEY=your_api_key_here
 FINANCIALMODELINGPREP_API_KEY=your_api_key_here
-DATABASE_URL=sqlite:data.db  # Optional, defaults to sqlite:data.db
+
+# WorkOS Authentication
+WORKOS_API_KEY=your_workos_api_key_here
+WORKOS_CLIENT_ID=your_workos_client_id_here
+
+# JWT Secret
+JWT_SECRET=your-secret-key-change-in-production
+
+# NATS Configuration (for background job processing)
+NATS_URL=nats://127.0.0.1:4222
+WORKER_COUNT=1
+WORKER_TIMEOUT_SECONDS=300
 ```
 
 ### Build Commands
@@ -121,12 +136,60 @@ sqlite3 data.db < tests/market_caps_totals_per_year.sql
 
 4. **Commands**: CLI interface using clap for parsing arguments
 
+5. **Web Server & Background Jobs**: Built with Axum and NATS
+   - Web server for UI and API endpoints
+   - NATS messaging for job queue and worker coordination
+   - Background worker for long-running tasks
+   - Server-Sent Events (SSE) for real-time progress updates
+
 ### Data Flow
 
 1. Fetch exchange rates for currency conversion
 2. Retrieve market cap data from various sources
 3. Store in SQLite database
 4. Generate reports (CSV exports, charts)
+
+### NATS Job Processing Architecture
+
+The application uses NATS with JetStream for background job processing, enabling:
+- **Job Persistence**: Jobs survive server restarts
+- **Scalability**: Can add multiple workers without code changes
+- **Decoupled Processing**: Jobs run independently of HTTP connections
+- **Real-time Progress**: SSE streams progress updates to clients
+
+**Architecture Flow:**
+```
+Client → Submit Job → NATS Queue → Background Worker → Execute Job
+                          ↓                              ↓
+                    Job Persisted              Progress Updates
+                          ↓                              ↓
+                    Can Reconnect ← NATS Pub/Sub ← SSE Stream
+```
+
+**NATS Subject Hierarchy:**
+- `jobs.submit.fetch-market-caps` - Job submission queue (WorkQueue)
+- `jobs.submit.comparison` - Comparison job queue (WorkQueue)
+- `jobs.{job_id}.status` - Job status updates (Limits, 10 messages)
+- `jobs.{job_id}.progress` - Progress events (Limits, 100 messages)
+- `jobs.{job_id}.result` - Final job result (Limits, 1 message)
+
+**Key Files:**
+- `src/nats/` - NATS integration module
+  - `client.rs` - NATS connection management
+  - `models.rs` - Job data structures
+  - `streams.rs` - JetStream stream configuration
+  - `jobs.rs` - Job submission API
+  - `worker.rs` - Background worker implementation
+- `src/web/routes/sse.rs` - SSE endpoints (NATS-backed)
+
+**Development Setup:**
+```bash
+# Start NATS server (required for web server)
+docker run -d --name nats-server -p 4222:4222 -p 8222:8222 nats:latest -js
+
+# Start web server (automatically connects to NATS and starts worker)
+cargo run -- serve --port 3000
+```
 
 ### Key Modules
 
@@ -141,6 +204,8 @@ sqlite3 data.db < tests/market_caps_totals_per_year.sql
 - `utils.rs`: Common utilities and helpers
 - `visualizations.rs`: Generate beautiful SVG charts from comparison data
 - `advanced_comparisons.rs`: Multi-date trends, YoY/QoQ, rolling periods, benchmarks, peer groups
+- `nats/`: NATS messaging integration for background job processing (see NATS Architecture section above)
+- `web/`: Web server, routes, and SSE endpoints
 
 ## Common Tasks
 

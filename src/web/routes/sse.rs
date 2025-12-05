@@ -273,3 +273,72 @@ fn create_error_event(error: &str) -> Event {
 
     Event::default().json_data(msg).unwrap()
 }
+
+/// SSE endpoint to reconnect to an existing job
+pub async fn job_progress_sse(
+    State(state): State<AppState>,
+    axum::extract::Path(job_id): axum::extract::Path<String>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let nats_client = state.nats_client.clone();
+
+    let stream = async_stream::stream! {
+        // Subscribe to job progress and result
+        let progress_subject = format!("jobs.{}.progress", job_id);
+        let result_subject = format!("jobs.{}.result", job_id);
+        let status_subject = format!("jobs.{}.status", job_id);
+
+        let mut progress_sub = match nats_client.inner().subscribe(progress_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to progress: {}", e)));
+                return;
+            }
+        };
+
+        let mut result_sub = match nats_client.inner().subscribe(result_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to result: {}", e)));
+                return;
+            }
+        };
+
+        let mut status_sub = match nats_client.inner().subscribe(status_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to status: {}", e)));
+                return;
+            }
+        };
+
+        loop {
+            tokio::select! {
+                Some(msg) = progress_sub.next() => {
+                    if let Ok(progress) = serde_json::from_slice::<crate::nats::JobProgress>(&msg.payload) {
+                        yield Ok(create_step_event(progress.step, &progress.message));
+                    }
+                }
+                Some(msg) = status_sub.next() => {
+                    if let Ok(status) = serde_json::from_slice::<crate::nats::JobStatus>(&msg.payload) {
+                        if let Some(error) = status.error {
+                            yield Ok(create_error_event(&error));
+                            break;
+                        }
+                    }
+                }
+                Some(msg) = result_sub.next() => {
+                    if let Ok(result) = serde_json::from_slice::<crate::nats::JobResult>(&msg.payload) {
+                        if result.status == crate::nats::models::JobResultStatus::Success {
+                            yield Ok(create_success_event());
+                        } else if let Some(error) = result.error {
+                            yield Ok(create_error_event(&error));
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    Sse::new(stream)
+}
