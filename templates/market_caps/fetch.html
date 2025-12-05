@@ -108,25 +108,17 @@ document.getElementById('fetchForm').addEventListener('submit', async function(e
     eventSource.onmessage = function(event) {
         const data = JSON.parse(event.data);
 
-        if (data.type === 'progress' && data.progress) {
-            const { current, total, ticker } = data.progress;
-            const percent = Math.round((current / total) * 100);
+        if (data.type === 'step' && data.message) {
+            document.getElementById('current_ticker').textContent = data.message;
 
-            document.getElementById('progress_bar').style.width = percent + '%';
-            document.getElementById('progress_text').textContent = `${current} / ${total}`;
+            // Add to log
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.textContent = data.message;
+            log.appendChild(entry);
 
-            if (ticker) {
-                document.getElementById('current_ticker').textContent = ticker;
-
-                // Add to log
-                const log = document.getElementById('log');
-                const entry = document.createElement('div');
-                entry.textContent = `✓ ${ticker}`;
-                log.appendChild(entry);
-
-                // Auto-scroll to bottom
-                log.parentElement.scrollTop = log.parentElement.scrollHeight;
-            }
+            // Auto-scroll to bottom
+            log.parentElement.scrollTop = log.parentElement.scrollHeight;
         } else if (data.type === 'success') {
             eventSource.close();
             document.getElementById('submitBtn').disabled = false;

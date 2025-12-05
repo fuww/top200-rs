@@ -260,7 +260,7 @@ pub async fn fetch_market_caps_sse(
         let total_tickers = config.us_tickers.len() + config.non_us_tickers.len();
 
         let _ = tx
-            .send(create_progress_event(0, total_tickers, "Starting..."))
+            .send(create_step_event(1, &format!("Fetching market caps for {} tickers...", total_tickers)))
             .await;
 
         // Execute the fetch command
@@ -272,28 +272,6 @@ pub async fn fetch_market_caps_sse(
 
         match result {
             Ok(output) if output.status.success() => {
-                // Simulate progress updates (in real implementation, you'd parse output)
-                for i in 1..=total_tickers {
-                    let ticker = if i <= config.us_tickers.len() {
-                        config.us_tickers.get(i - 1).cloned()
-                    } else {
-                        config
-                            .non_us_tickers
-                            .get(i - config.us_tickers.len() - 1)
-                            .cloned()
-                    };
-
-                    let _ = tx
-                        .send(create_progress_event(
-                            i,
-                            total_tickers,
-                            ticker.as_deref().unwrap_or("Unknown"),
-                        ))
-                        .await;
-
-                    sleep(Duration::from_millis(50)).await;
-                }
-
                 let _ = tx.send(create_success_event()).await;
             }
             Ok(output) => {
