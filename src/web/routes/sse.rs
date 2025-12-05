@@ -260,7 +260,10 @@ pub async fn fetch_market_caps_sse(
         let total_tickers = config.us_tickers.len() + config.non_us_tickers.len();
 
         let _ = tx
-            .send(create_step_event(1, &format!("Fetching market caps for {} tickers...", total_tickers)))
+            .send(create_step_event(
+                1,
+                &format!("Fetching market caps for {} tickers...", total_tickers),
+            ))
             .await;
 
         // Execute the fetch command

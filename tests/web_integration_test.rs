@@ -324,11 +324,6 @@ async fn test_invalid_routes_return_404() {
             .await
             .expect("Failed to connect to server");
 
-        assert_eq!(
-            response.status(),
-            404,
-            "Route {} should return 404",
-            route
-        );
+        assert_eq!(response.status(), 404, "Route {} should return 404", route);
     }
 }

@@ -291,14 +291,14 @@ fn parse_marketcap_filename(filename: &str, csv_path: &Path) -> Option<MarketCap
         .split('_')
         .collect();
 
-    // Should have at least date (YYYY-MM-DD = 3 parts) + timestamp
-    if parts.len() < 4 {
+    // Should have at least date + timestamp (2 parts minimum)
+    if parts.len() < 2 {
         return None;
     }
 
-    // Parse date: YYYY-MM-DD
-    let date = parts[..3].join("-");
-    let timestamp = parts[3..].join("_");
+    // Parse date: YYYY-MM-DD (first part)
+    let date = parts[0].to_string();
+    let timestamp = parts[1..].join("_");
 
     // Get total companies by reading the CSV
     let total_companies = fs::File::open(csv_path)
