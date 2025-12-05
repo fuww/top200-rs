@@ -10,12 +10,8 @@ use futures::stream::Stream;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use std::time::Duration;
-use tokio::process::Command;
-use tokio::sync::mpsc;
-use tokio::time::sleep;
-use tokio_stream::wrappers::ReceiverStream;
 
+use crate::nats::{JobParameters, JobType};
 use crate::web::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -48,256 +44,179 @@ struct Progress {
     ticker: Option<String>,
 }
 
-/// SSE endpoint for generating comparisons
+/// SSE endpoint for generating comparisons (NATS-backed)
 pub async fn generate_comparison_sse(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(params): Query<GenerateComparisonParams>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let from_date = params.from_date.clone();
     let to_date = params.to_date.clone();
     let generate_charts = params.generate_charts;
+    let nats_client = state.nats_client.clone();
 
-    let (tx, rx) = mpsc::channel(32);
-
-    tokio::spawn(async move {
-        // Step 1: Fetch market caps for from_date
-        let _ = tx
-            .send(create_step_event(
-                1,
-                "Fetching market caps for from date...",
-            ))
-            .await;
-
-        let result = Command::new("cargo")
-            .args(&["run", "--", "fetch-specific-date-market-caps", &from_date])
-            .envs(std::env::vars())
-            .output()
-            .await;
-
-        match result {
-            Ok(output) if output.status.success() => {
-                let _ = tx
-                    .send(create_step_event(1, "✓ From date market caps fetched"))
-                    .await;
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to fetch from date market caps: {}",
-                        error_msg
-                    )))
-                    .await;
-                return;
-            }
+    let stream = async_stream::stream! {
+        // Submit job to NATS
+        let job_id = match crate::nats::submit_job(
+            &nats_client,
+            JobType::GenerateComparison,
+            JobParameters::GenerateComparison {
+                from_date,
+                to_date,
+                generate_charts,
+            },
+        )
+        .await
+        {
+            Ok(id) => id,
             Err(e) => {
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to execute command: {}",
-                        e
-                    )))
-                    .await;
+                yield Ok(create_error_event(&format!("Failed to submit job: {}", e)));
                 return;
             }
-        }
+        };
 
-        sleep(Duration::from_millis(500)).await;
+        // Subscribe to job progress and result
+        let progress_subject = format!("jobs.{}.progress", job_id);
+        let result_subject = format!("jobs.{}.result", job_id);
+        let status_subject = format!("jobs.{}.status", job_id);
 
-        // Step 2: Fetch market caps for to_date
-        let _ = tx
-            .send(create_step_event(2, "Fetching market caps for to date..."))
-            .await;
-
-        let result = Command::new("cargo")
-            .args(&["run", "--", "fetch-specific-date-market-caps", &to_date])
-            .envs(std::env::vars())
-            .output()
-            .await;
-
-        match result {
-            Ok(output) if output.status.success() => {
-                let _ = tx
-                    .send(create_step_event(2, "✓ To date market caps fetched"))
-                    .await;
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to fetch to date market caps: {}",
-                        error_msg
-                    )))
-                    .await;
-                return;
-            }
+        let mut progress_sub = match nats_client.inner().subscribe(progress_subject).await {
+            Ok(sub) => sub,
             Err(e) => {
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to execute command: {}",
-                        e
-                    )))
-                    .await;
+                yield Ok(create_error_event(&format!("Failed to subscribe to progress: {}", e)));
                 return;
             }
-        }
+        };
 
-        sleep(Duration::from_millis(500)).await;
-
-        // Step 3: Generate comparison
-        let _ = tx
-            .send(create_step_event(3, "Generating comparison report..."))
-            .await;
-
-        let result = Command::new("cargo")
-            .args(&[
-                "run",
-                "--",
-                "compare-market-caps",
-                "--from",
-                &from_date,
-                "--to",
-                &to_date,
-            ])
-            .envs(std::env::vars())
-            .output()
-            .await;
-
-        match result {
-            Ok(output) if output.status.success() => {
-                let _ = tx
-                    .send(create_step_event(3, "✓ Comparison report generated"))
-                    .await;
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to generate comparison: {}",
-                        error_msg
-                    )))
-                    .await;
-                return;
-            }
+        let mut result_sub = match nats_client.inner().subscribe(result_subject).await {
+            Ok(sub) => sub,
             Err(e) => {
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to execute command: {}",
-                        e
-                    )))
-                    .await;
+                yield Ok(create_error_event(&format!("Failed to subscribe to result: {}", e)));
                 return;
             }
-        }
+        };
 
-        sleep(Duration::from_millis(500)).await;
+        let mut status_sub = match nats_client.inner().subscribe(status_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to status: {}", e)));
+                return;
+            }
+        };
 
-        // Step 4: Generate charts (if requested)
-        if generate_charts {
-            let _ = tx
-                .send(create_step_event(4, "Generating visualization charts..."))
-                .await;
-
-            let result = Command::new("cargo")
-                .args(&[
-                    "run",
-                    "--",
-                    "generate-charts",
-                    "--from",
-                    &from_date,
-                    "--to",
-                    &to_date,
-                ])
-                .envs(std::env::vars())
-                .output()
-                .await;
-
-            match result {
-                Ok(output) if output.status.success() => {
-                    let _ = tx.send(create_step_event(4, "✓ Charts generated")).await;
+        loop {
+            tokio::select! {
+                Some(msg) = progress_sub.next() => {
+                    if let Ok(progress) = serde_json::from_slice::<crate::nats::JobProgress>(&msg.payload) {
+                        yield Ok(create_step_event(progress.step, &progress.message));
+                    }
                 }
-                Ok(output) => {
-                    let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    let _ = tx
-                        .send(create_error_event(&format!(
-                            "Failed to generate charts: {}",
-                            error_msg
-                        )))
-                        .await;
-                    return;
+                Some(msg) = status_sub.next() => {
+                    if let Ok(status) = serde_json::from_slice::<crate::nats::JobStatus>(&msg.payload) {
+                        if let Some(error) = status.error {
+                            yield Ok(create_error_event(&error));
+                            break;
+                        }
+                    }
                 }
-                Err(e) => {
-                    let _ = tx
-                        .send(create_error_event(&format!(
-                            "Failed to execute command: {}",
-                            e
-                        )))
-                        .await;
-                    return;
+                Some(msg) = result_sub.next() => {
+                    if let Ok(result) = serde_json::from_slice::<crate::nats::JobResult>(&msg.payload) {
+                        if result.status == crate::nats::models::JobResultStatus::Success {
+                            yield Ok(create_success_event());
+                        } else if let Some(error) = result.error {
+                            yield Ok(create_error_event(&error));
+                        }
+                        break;
+                    }
                 }
             }
         }
+    };
 
-        // Success!
-        let _ = tx.send(create_success_event()).await;
-    });
-
-    let stream = ReceiverStream::new(rx).map(Ok);
     Sse::new(stream)
 }
 
-/// SSE endpoint for fetching market caps
+/// SSE endpoint for fetching market caps (NATS-backed)
 pub async fn fetch_market_caps_sse(
     State(state): State<AppState>,
     Query(params): Query<FetchMarketCapsParams>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let date = params.date.clone();
-    let config = state.config.clone();
+    let nats_client = state.nats_client.clone();
 
-    let (tx, rx) = mpsc::channel(32);
-
-    tokio::spawn(async move {
-        // Get total number of tickers
-        let total_tickers = config.us_tickers.len() + config.non_us_tickers.len();
-
-        let _ = tx
-            .send(create_step_event(
-                1,
-                &format!("Fetching market caps for {} tickers...", total_tickers),
-            ))
-            .await;
-
-        // Execute the fetch command
-        let result = Command::new("cargo")
-            .args(&["run", "--", "fetch-specific-date-market-caps", &date])
-            .envs(std::env::vars())
-            .output()
-            .await;
-
-        match result {
-            Ok(output) if output.status.success() => {
-                let _ = tx.send(create_success_event()).await;
-            }
-            Ok(output) => {
-                let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to fetch market caps: {}",
-                        error_msg
-                    )))
-                    .await;
-            }
+    let stream = async_stream::stream! {
+        // Submit job to NATS
+        let job_id = match crate::nats::submit_job(
+            &nats_client,
+            JobType::FetchMarketCaps,
+            JobParameters::FetchMarketCaps { date },
+        )
+        .await
+        {
+            Ok(id) => id,
             Err(e) => {
-                let _ = tx
-                    .send(create_error_event(&format!(
-                        "Failed to execute command: {}",
-                        e
-                    )))
-                    .await;
+                yield Ok(create_error_event(&format!("Failed to submit job: {}", e)));
+                return;
+            }
+        };
+
+        // Subscribe to job progress and result
+        let progress_subject = format!("jobs.{}.progress", job_id);
+        let result_subject = format!("jobs.{}.result", job_id);
+        let status_subject = format!("jobs.{}.status", job_id);
+
+        let mut progress_sub = match nats_client.inner().subscribe(progress_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to progress: {}", e)));
+                return;
+            }
+        };
+
+        let mut result_sub = match nats_client.inner().subscribe(result_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to result: {}", e)));
+                return;
+            }
+        };
+
+        let mut status_sub = match nats_client.inner().subscribe(status_subject).await {
+            Ok(sub) => sub,
+            Err(e) => {
+                yield Ok(create_error_event(&format!("Failed to subscribe to status: {}", e)));
+                return;
+            }
+        };
+
+        loop {
+            tokio::select! {
+                Some(msg) = progress_sub.next() => {
+                    if let Ok(progress) = serde_json::from_slice::<crate::nats::JobProgress>(&msg.payload) {
+                        yield Ok(create_step_event(progress.step, &progress.message));
+                    }
+                }
+                Some(msg) = status_sub.next() => {
+                    if let Ok(status) = serde_json::from_slice::<crate::nats::JobStatus>(&msg.payload) {
+                        if let Some(error) = status.error {
+                            yield Ok(create_error_event(&error));
+                            break;
+                        }
+                    }
+                }
+                Some(msg) = result_sub.next() => {
+                    if let Ok(result) = serde_json::from_slice::<crate::nats::JobResult>(&msg.payload) {
+                        if result.status == crate::nats::models::JobResultStatus::Success {
+                            yield Ok(create_success_event());
+                        } else if let Some(error) = result.error {
+                            yield Ok(create_error_event(&error));
+                        }
+                        break;
+                    }
+                }
             }
         }
-    });
+    };
 
-    let stream = ReceiverStream::new(rx).map(Ok);
     Sse::new(stream)
 }
 
