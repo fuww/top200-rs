@@ -40,3 +40,5 @@ certs/
 
 !output/.gitkeep
 output/
+
+**/*.local.json
