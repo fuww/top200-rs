@@ -1,0 +1,50 @@
+{
+  "description": "Edge case exchange rates for testing validation",
+  "note": "These rates should trigger warnings in the validation system",
+  "test_cases": [
+    {
+      "name": "zero_rate",
+      "symbol": "XXX/YYY",
+      "rate": 0.0,
+      "expected_warning": "Non-positive rate"
+    },
+    {
+      "name": "negative_rate",
+      "symbol": "AAA/BBB",
+      "rate": -1.5,
+      "expected_warning": "Non-positive rate"
+    },
+    {
+      "name": "suspiciously_high_rate",
+      "symbol": "CCC/DDD",
+      "rate": 50000.0,
+      "expected_warning": "Suspiciously high rate"
+    },
+    {
+      "name": "suspiciously_low_rate",
+      "symbol": "EEE/FFF",
+      "rate": 0.00001,
+      "expected_warning": "Suspiciously low rate"
+    },
+    {
+      "name": "infinity",
+      "symbol": "GGG/HHH",
+      "rate": "Infinity",
+      "expected_warning": "Infinite rate",
+      "note": "JavaScript representation, would be f64::INFINITY in Rust"
+    },
+    {
+      "name": "negative_infinity",
+      "symbol": "III/JJJ",
+      "rate": "-Infinity",
+      "expected_warning": "Infinite rate"
+    },
+    {
+      "name": "nan",
+      "symbol": "KKK/LLL",
+      "rate": "NaN",
+      "expected_warning": "NaN rate",
+      "note": "JavaScript representation, would be f64::NAN in Rust"
+    }
+  ]
+}

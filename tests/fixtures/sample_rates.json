@@ -1,0 +1,24 @@
+{
+  "description": "Standard exchange rates for testing currency conversion",
+  "timestamp": "2025-01-01T00:00:00Z",
+  "rates": {
+    "EUR/USD": 1.08,
+    "USD/EUR": 0.9259259259,
+    "GBP/USD": 1.27,
+    "USD/GBP": 0.7874015748,
+    "USD/JPY": 150.0,
+    "JPY/USD": 0.0066666667,
+    "EUR/GBP": 0.85,
+    "GBP/EUR": 1.1764705882,
+    "USD/CHF": 0.88,
+    "CHF/USD": 1.1363636364,
+    "USD/SEK": 10.5,
+    "SEK/USD": 0.0952380952,
+    "EUR/JPY": 162.0,
+    "JPY/EUR": 0.0061728395,
+    "GBP/JPY": 190.5,
+    "JPY/GBP": 0.0052493438,
+    "GBP/CHF": 1.1176,
+    "CHF/GBP": 0.8947688629
+  }
+}
