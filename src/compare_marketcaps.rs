@@ -370,7 +370,10 @@ fn export_summary_report(
     )?;
     writeln!(file)?;
 
-    writeln!(file, "> **Note:** All values are shown in each company's original currency. Percentage changes reflect actual local currency performance.")?;
+    writeln!(
+        file,
+        "> **Note:** All values are shown in each company's original currency. Percentage changes reflect actual local currency performance."
+    )?;
     writeln!(file)?;
 
     // Overview statistics

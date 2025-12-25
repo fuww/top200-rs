@@ -7,8 +7,8 @@ use futures::StreamExt;
 use tokio::process::Command;
 
 use super::{
-    publish_job_progress, publish_job_result, publish_job_status, JobParameters, JobProgress,
-    JobRequest, JobResult, JobStatus, JobType, NatsClient,
+    JobParameters, JobProgress, JobRequest, JobResult, JobStatus, JobType, NatsClient,
+    publish_job_progress, publish_job_result, publish_job_status,
 };
 
 /// Start the background worker that processes jobs from NATS queue

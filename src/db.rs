@@ -5,7 +5,7 @@
 // use crate::api::ExchangeRate;
 // use crate::currencies;
 use anyhow::Result;
-use sqlx::{migrate::MigrateDatabase, sqlite::SqlitePool, Sqlite};
+use sqlx::{Sqlite, migrate::MigrateDatabase, sqlite::SqlitePool};
 
 pub async fn create_db_pool(db_url: &str) -> Result<SqlitePool> {
     // Create database if it doesn't exist

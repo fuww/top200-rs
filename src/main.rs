@@ -344,8 +344,10 @@ async fn main() -> Result<()> {
                 .await?;
             } else {
                 // Interactive mode - ask user to confirm
-                println!("\nFound {} applicable changes. Run with --auto-apply to apply them or --dry-run to preview.",
-                    report.applicable_changes.len());
+                println!(
+                    "\nFound {} applicable changes. Run with --auto-apply to apply them or --dry-run to preview.",
+                    report.applicable_changes.len()
+                );
             }
         }
         Some(Commands::Serve { port }) => {

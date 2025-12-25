@@ -8,7 +8,7 @@ pub mod models;
 pub mod streams;
 pub mod worker;
 
-pub use client::{create_nats_client, NatsClient};
+pub use client::{NatsClient, create_nats_client};
 pub use jobs::{publish_job_progress, publish_job_result, publish_job_status, submit_job};
 pub use models::{JobParameters, JobProgress, JobRequest, JobResult, JobStatus, JobType};
 pub use streams::setup_streams;

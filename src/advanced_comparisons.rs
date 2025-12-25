@@ -1347,7 +1347,9 @@ pub async fn compare_peer_groups(
     };
 
     if selected_groups.is_empty() {
-        anyhow::bail!("No peer groups found. Available groups: Luxury, Sportswear, Fast Fashion, Department Stores, Value Retail, Footwear, E-commerce, Asian Fashion");
+        anyhow::bail!(
+            "No peer groups found. Available groups: Luxury, Sportswear, Fast Fashion, Department Stores, Value Retail, Footwear, E-commerce, Asian Fashion"
+        );
     }
 
     // Get exchange rates

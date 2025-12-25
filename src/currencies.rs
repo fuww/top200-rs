@@ -632,9 +632,11 @@ mod tests {
         // Test updating an existing currency
         insert_currency(&pool, "XYZ", "Updated Currency").await?;
         let updated = list_currencies(&pool).await?;
-        assert!(updated
-            .iter()
-            .any(|(c, n)| c == "XYZ" && n == "Updated Currency"));
+        assert!(
+            updated
+                .iter()
+                .any(|(c, n)| c == "XYZ" && n == "Updated Currency")
+        );
 
         // Test getting non-existent currency
         let missing = list_currencies(&pool).await?;

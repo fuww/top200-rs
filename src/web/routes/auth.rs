@@ -5,11 +5,11 @@
 use askama::Template;
 use axum::{
     extract::{Query, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
 use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Deserialize;
 use workos::sso::{
     AuthorizationCode, ClientId, ConnectionSelector, GetAuthorizationUrl,

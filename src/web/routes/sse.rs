@@ -6,8 +6,8 @@ use axum::{
     extract::{Query, State},
     response::sse::{Event, Sse},
 };
-use futures::stream::Stream;
 use futures::StreamExt;
+use futures::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 
