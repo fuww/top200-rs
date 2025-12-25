@@ -35,10 +35,14 @@ pub async fn start_worker(nats_client: NatsClient) -> Result<()> {
             }
         };
 
-        println!("📋 Received job: {} ({})", job_request.job_id, match &job_request.job_type {
-            JobType::FetchMarketCaps => "fetch-market-caps",
-            JobType::GenerateComparison => "comparison",
-        });
+        println!(
+            "📋 Received job: {} ({})",
+            job_request.job_id,
+            match &job_request.job_type {
+                JobType::FetchMarketCaps => "fetch-market-caps",
+                JobType::GenerateComparison => "comparison",
+            }
+        );
 
         // Clone for async task
         let client = nats_client.clone();
@@ -50,7 +54,11 @@ pub async fn start_worker(nats_client: NatsClient) -> Result<()> {
                 eprintln!("❌ Job {} failed: {}", job_id, e);
 
                 // Publish failure status and result
-                let _ = publish_job_status(&client, JobStatus::new_failed(job_id.clone(), e.to_string())).await;
+                let _ = publish_job_status(
+                    &client,
+                    JobStatus::new_failed(job_id.clone(), e.to_string()),
+                )
+                .await;
                 let _ = publish_job_result(&client, JobResult::failed(job_id, e.to_string())).await;
             }
         });
@@ -87,7 +95,11 @@ async fn execute_fetch_market_caps(
     // Update status to running
     publish_job_status(
         nats_client,
-        JobStatus::new_running(job_id.clone(), 1, format!("Fetching market caps for {}", date)),
+        JobStatus::new_running(
+            job_id.clone(),
+            1,
+            format!("Fetching market caps for {}", date),
+        ),
     )
     .await?;
 
@@ -144,13 +156,22 @@ async fn execute_generate_comparison(
     // Step 1: Fetch market caps for from_date
     publish_job_status(
         nats_client,
-        JobStatus::new_running(job_id.clone(), 1, "Fetching from date market caps...".to_string()),
+        JobStatus::new_running(
+            job_id.clone(),
+            1,
+            "Fetching from date market caps...".to_string(),
+        ),
     )
     .await?;
 
     publish_job_progress(
         nats_client,
-        JobProgress::new(job_id.clone(), 1, format!("Fetching market caps for {}", from_date), None),
+        JobProgress::new(
+            job_id.clone(),
+            1,
+            format!("Fetching market caps for {}", from_date),
+            None,
+        ),
     )
     .await?;
 
@@ -169,13 +190,22 @@ async fn execute_generate_comparison(
     // Step 2: Fetch market caps for to_date
     publish_job_status(
         nats_client,
-        JobStatus::new_running(job_id.clone(), 2, "Fetching to date market caps...".to_string()),
+        JobStatus::new_running(
+            job_id.clone(),
+            2,
+            "Fetching to date market caps...".to_string(),
+        ),
     )
     .await?;
 
     publish_job_progress(
         nats_client,
-        JobProgress::new(job_id.clone(), 2, format!("Fetching market caps for {}", to_date), None),
+        JobProgress::new(
+            job_id.clone(),
+            2,
+            format!("Fetching market caps for {}", to_date),
+            None,
+        ),
     )
     .await?;
 
@@ -200,7 +230,12 @@ async fn execute_generate_comparison(
 
     publish_job_progress(
         nats_client,
-        JobProgress::new(job_id.clone(), 3, "Generating comparison report".to_string(), None),
+        JobProgress::new(
+            job_id.clone(),
+            3,
+            "Generating comparison report".to_string(),
+            None,
+        ),
     )
     .await?;
 
@@ -236,7 +271,12 @@ async fn execute_generate_comparison(
 
         publish_job_progress(
             nats_client,
-            JobProgress::new(job_id.clone(), 4, "Generating visualization charts".to_string(), None),
+            JobProgress::new(
+                job_id.clone(),
+                4,
+                "Generating visualization charts".to_string(),
+                None,
+            ),
         )
         .await?;
 

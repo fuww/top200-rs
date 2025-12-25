@@ -28,8 +28,7 @@ pub async fn submit_job(
         JobType::GenerateComparison => "jobs.submit.comparison",
     };
 
-    let payload = serde_json::to_vec(&job_request)
-        .context("Failed to serialize job request")?;
+    let payload = serde_json::to_vec(&job_request).context("Failed to serialize job request")?;
 
     nats_client
         .inner()
@@ -46,8 +45,7 @@ pub async fn submit_job(
 /// Publish job status update
 pub async fn publish_job_status(nats_client: &NatsClient, status: JobStatus) -> Result<()> {
     let subject = format!("jobs.{}.status", status.job_id);
-    let payload = serde_json::to_vec(&status)
-        .context("Failed to serialize job status")?;
+    let payload = serde_json::to_vec(&status).context("Failed to serialize job status")?;
 
     nats_client
         .inner()
@@ -61,8 +59,7 @@ pub async fn publish_job_status(nats_client: &NatsClient, status: JobStatus) -> 
 /// Publish job progress update
 pub async fn publish_job_progress(nats_client: &NatsClient, progress: JobProgress) -> Result<()> {
     let subject = format!("jobs.{}.progress", progress.job_id);
-    let payload = serde_json::to_vec(&progress)
-        .context("Failed to serialize job progress")?;
+    let payload = serde_json::to_vec(&progress).context("Failed to serialize job progress")?;
 
     nats_client
         .inner()
@@ -76,8 +73,7 @@ pub async fn publish_job_progress(nats_client: &NatsClient, progress: JobProgres
 /// Publish job result (final outcome)
 pub async fn publish_job_result(nats_client: &NatsClient, result: JobResult) -> Result<()> {
     let subject = format!("jobs.{}.result", result.job_id);
-    let payload = serde_json::to_vec(&result)
-        .context("Failed to serialize job result")?;
+    let payload = serde_json::to_vec(&result).context("Failed to serialize job result")?;
 
     nats_client
         .inner()
