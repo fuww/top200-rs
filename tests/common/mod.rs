@@ -111,11 +111,7 @@ pub fn create_sample_rate_map() -> HashMap<String, f64> {
 ///
 /// Returns the path to the created temporary CSV file.
 /// The caller is responsible for cleaning up the file.
-pub fn create_test_csv_file(
-    dir: &Path,
-    date: &str,
-    companies: &[TestCompany],
-) -> Result<PathBuf> {
+pub fn create_test_csv_file(dir: &Path, date: &str, companies: &[TestCompany]) -> Result<PathBuf> {
     let filename = format!("marketcaps_{}_{}.csv", date, "test");
     let file_path = dir.join(&filename);
     let file = std::fs::File::create(&file_path)?;
@@ -292,7 +288,10 @@ mod tests {
         let eur_usd = rate_map.get("EUR/USD").unwrap();
         let usd_eur = rate_map.get("USD/EUR").unwrap();
         let product = eur_usd * usd_eur;
-        assert!((product - 1.0).abs() < 0.0001, "Reverse rates should be reciprocals");
+        assert!(
+            (product - 1.0).abs() < 0.0001,
+            "Reverse rates should be reciprocals"
+        );
     }
 
     #[test]
@@ -312,7 +311,13 @@ mod tests {
         // Verify columns
         let columns = assert_csv_has_columns(
             &csv_path,
-            &["Rank", "Ticker", "Name", "Market Cap (EUR)", "Market Cap (USD)"],
+            &[
+                "Rank",
+                "Ticker",
+                "Name",
+                "Market Cap (EUR)",
+                "Market Cap (USD)",
+            ],
         );
         assert!(columns.is_ok(), "Should have expected columns");
     }

@@ -112,12 +112,6 @@ fn test_date_to_timestamp() {
     assert!(result.is_ok(), "Should parse valid date");
 
     let timestamp = result.unwrap();
-    assert!(
-        timestamp > 1_700_000_000,
-        "Timestamp should be after 2023"
-    );
-    assert!(
-        timestamp < 2_000_000_000,
-        "Timestamp should be before 2033"
-    );
+    assert!(timestamp > 1_700_000_000, "Timestamp should be after 2023");
+    assert!(timestamp < 2_000_000_000, "Timestamp should be before 2033");
 }

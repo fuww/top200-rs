@@ -25,7 +25,9 @@ pub enum JobType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum JobParameters {
-    FetchMarketCaps { date: String },
+    FetchMarketCaps {
+        date: String,
+    },
     GenerateComparison {
         from_date: String,
         to_date: String,
