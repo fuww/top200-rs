@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-only
 
-use axum::{routing::get, Json, Router};
+use axum::{Json, Router, routing::get};
 use serde_json::json;
 use std::net::SocketAddr;
 use tower_http::services::ServeDir;

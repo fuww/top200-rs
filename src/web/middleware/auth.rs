@@ -5,10 +5,10 @@
 use axum::{
     async_trait,
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::{DecodingKey, Validation, decode};
 
 use crate::web::{
     models::auth::{Claims, User},

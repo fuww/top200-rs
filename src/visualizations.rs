@@ -1106,10 +1106,12 @@ NEWCO,New Company,,1000000000,,,,100,NA,,"#;
 
         assert_eq!(record.ticker, "NEWCO");
         // Empty CSV fields deserialize as Some("") not None
-        assert!(record
-            .market_cap_from
-            .as_ref()
-            .map_or(true, |s| s.is_empty()));
+        assert!(
+            record
+                .market_cap_from
+                .as_ref()
+                .map_or(true, |s| s.is_empty())
+        );
         assert_eq!(record.market_cap_to, Some("1000000000".to_string()));
         assert!(record.rank_from.as_ref().map_or(true, |s| s.is_empty()));
         assert_eq!(record.rank_to, Some("100".to_string()));

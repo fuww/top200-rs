@@ -30,7 +30,10 @@ pub async fn setup_streams(nats_client: &NatsClient) -> Result<()> {
     match jetstream.get_or_create_stream(submit_config).await {
         Ok(_) => println!("✓ JetStream stream '{}' ready", JOBS_SUBMIT_STREAM),
         Err(e) => {
-            eprintln!("Warning: Failed to create stream {}: {}", JOBS_SUBMIT_STREAM, e);
+            eprintln!(
+                "Warning: Failed to create stream {}: {}",
+                JOBS_SUBMIT_STREAM, e
+            );
         }
     }
 
@@ -38,7 +41,11 @@ pub async fn setup_streams(nats_client: &NatsClient) -> Result<()> {
     let tracking_config = Config {
         name: JOBS_TRACKING_STREAM.to_string(),
         description: Some("Job status and progress tracking".to_string()),
-        subjects: vec!["jobs.*.status".to_string(), "jobs.*.progress".to_string(), "jobs.*.result".to_string()],
+        subjects: vec![
+            "jobs.*.status".to_string(),
+            "jobs.*.progress".to_string(),
+            "jobs.*.result".to_string(),
+        ],
         retention: RetentionPolicy::Limits,
         max_age: Duration::from_secs(60 * 60), // 1 hour
         max_messages_per_subject: 100,
@@ -49,7 +56,10 @@ pub async fn setup_streams(nats_client: &NatsClient) -> Result<()> {
     match jetstream.get_or_create_stream(tracking_config).await {
         Ok(_) => println!("✓ JetStream stream '{}' ready", JOBS_TRACKING_STREAM),
         Err(e) => {
-            eprintln!("Warning: Failed to create stream {}: {}", JOBS_TRACKING_STREAM, e);
+            eprintln!(
+                "Warning: Failed to create stream {}: {}",
+                JOBS_TRACKING_STREAM, e
+            );
         }
     }
 
