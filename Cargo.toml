@@ -44,3 +44,4 @@ workos = "0.7"
 [dev-dependencies]
 tempfile = "3.8.1"
 approx = "0.5.1"
+proptest = "1.0"
