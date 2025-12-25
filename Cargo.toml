@@ -39,7 +39,7 @@ askama_axum = "0.4"
 
 # Authentication
 jsonwebtoken = "9.2"
-workos = "0.7"
+workos = "0.5"
 
 [dev-dependencies]
 tempfile = "3.8.1"
