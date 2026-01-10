@@ -5,9 +5,9 @@
 name: Daily Market Caps Multi-Period Analysis
 
 on:
-  schedule:
-    # Run at 01:00 UTC every day (1 hour after the main daily-run)
-    - cron: '0 1 * * *'
+  # schedule:
+  #   # Run at 01:00 UTC every day (1 hour after the main daily-run)
+  #   - cron: '0 1 * * *'
   # Allow manual trigger
   workflow_dispatch:
   pull_request:
