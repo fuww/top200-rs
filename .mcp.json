@@ -4,7 +4,6 @@
       "command": "/bin/sh",
       "args": [
         "-c",
-
         "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$PATH exec npx -y chrome-devtools-mcp@latest"
       ]
     },
@@ -21,6 +20,10 @@
         "-c",
         "PATH=/run/current-system/sw/bin:/etc/profiles/per-user/$USER/bin:$PATH exec npx -y @upstash/context7-mcp"
       ]
+    },
+    "linear": {
+      "type": "http",
+      "url": "https://mcp.linear.app/mcp"
     }
   }
 }
